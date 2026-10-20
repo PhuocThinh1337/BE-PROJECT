@@ -13,10 +13,13 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   async validate(username: string, password: string) {
     const user = await this.userService.findByUsername(username);
     if (!user || !(await argon2.verify(user.password, password))) {
-      throw new UnauthorizedException('Invalid username or password');
+      throw new UnauthorizedException('Tên đăng nhập hoặc mật khẩu không đúng. Vui lòng thử lại.');
     }
     if (user.status === true) {
-      throw new ForbiddenException('Account is locked');
+      throw new ForbiddenException('Tài khoản đã bị khóa.');
+    }
+    if (user.isActive === false) {
+      throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa.');
     }
     return user;
   }

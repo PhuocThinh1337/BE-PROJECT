@@ -6,7 +6,7 @@ import { User } from '../modules/user/user.entity';
 async function seedAuthUsers() {
   require('dotenv').config();
   if (process.env.NODE_ENV !== 'development') {
-    throw new Error('Auth demo accounts can only be seeded in development.');
+    throw new Error('Chỉ được tạo tài khoản xác thực mẫu trong môi trường phát triển.');
   }
 
   const connection = await createConnection({
@@ -41,13 +41,15 @@ async function seedAuthUsers() {
         await users.save(users.create({
           username: account.username,
           password: process.env.AUTH_DEMO_PASSWORD || 'Test@123456',
+          fullname: account.name,
           role,
           status: false,
+          isActive: true,
           email: account.email,
         }));
       }
     }
-    console.log('Development authentication accounts are ready.');
+    console.log('Các tài khoản xác thực mẫu trong môi trường phát triển đã sẵn sàng.');
   } finally {
     await connection.close();
   }

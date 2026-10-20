@@ -5,14 +5,16 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3002/api/v1" },
+    { "key": "baseUrl", "value": "http://localhost:3001/api/v1" },
     { "key": "username", "value": "so_admin" },
     { "key": "password", "value": "Test@123456" },
     { "key": "email", "value": "" },
     { "key": "newPassword", "value": "NewTest@123456" },
     { "key": "accessToken", "value": "" },
     { "key": "refreshToken", "value": "" },
-    { "key": "resetToken", "value": "" }
+    { "key": "resetOtp", "value": "" },
+    { "key": "emailChangeOtp", "value": "" },
+    { "key": "newEmail", "value": "" }
   ],
   "item": [
     {
@@ -53,19 +55,34 @@
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Refresh returns 200', () => pm.response.to.have.status(200));", "const body = pm.response.json();", "pm.collectionVariables.set('accessToken', body.data.accessToken);", "pm.collectionVariables.set('refreshToken', body.data.refreshToken);"] } }]
     },
     {
-      "name": "Forgot password - sends email (SMTP required)",
+      "name": "Forgot password - registered email sends OTP (SMTP required)",
       "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\"\n}" }, "url": "{{baseUrl}}/auth/forgot-password" },
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Forgot password returns 200 when SMTP is configured, or 503 when SMTP is not configured', () => pm.expect([200, 503]).to.include(pm.response.code));"] } }]
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Forgot password returns 200, or 503 when SMTP is unavailable', () => pm.expect([200, 503]).to.include(pm.response.code));"] } }]
     },
     {
-      "name": "Reset password - token from email",
-      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}" }, "url": "{{baseUrl}}/auth/reset-password" },
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Reset succeeds with the one-time token', () => pm.response.to.have.status(200));"] } }]
+      "name": "Reset password - OTP from email",
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"otpCode\": \"{{resetOtp}}\",\n  \"newPassword\": \"{{newPassword}}\",\n  \"confirmNewPassword\": \"{{newPassword}}\"\n}" }, "url": "{{baseUrl}}/auth/reset-password" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Reset succeeds with the emailed OTP', () => pm.response.to.have.status(200));"] } }]
     },
     {
       "name": "Change password - requires current access token",
       "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}" }, "url": "{{baseUrl}}/auth/change-password" },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Password change succeeds', () => pm.response.to.have.status(200));"] } }]
+    },
+    {
+      "name": "Change email - request OTP to current email",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/auth/change-email/request-otp" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Email OTP request succeeds', () => pm.response.to.have.status(201));"] } }]
+    },
+    {
+      "name": "Change email - verify OTP",
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"otpCode\": \"{{emailChangeOtp}}\"\n}" }, "url": "{{baseUrl}}/auth/change-email/verify-otp" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Email OTP verification succeeds', () => pm.response.to.have.status(201));"] } }]
+    },
+    {
+      "name": "Change email - save new address",
+      "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"newEmail\": \"{{newEmail}}\"\n}" }, "url": "{{baseUrl}}/auth/change-email" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Email update succeeds', () => pm.response.to.have.status(200));"] } }]
     },
     {
       "name": "Logout - revokes current session",

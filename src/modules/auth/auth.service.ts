@@ -1,7 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'crypto';
 import * as argon2 from 'argon2';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -11,6 +11,8 @@ import { MailService } from './mail.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthSession } from './auth-session.entity';
+import { EmailChangeRequest } from './email-change-request.entity';
+import { PASSWORD_RESET_OTP_MAX_ATTEMPTS, PASSWORD_RESET_OTP_TTL_MINUTES } from './auth.constants';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +23,8 @@ export class AuthService {
     private readonly config: ConfigService,
     @InjectRepository(AuthSession)
     private readonly sessionRepository: Repository<AuthSession>,
+    @InjectRepository(EmailChangeRequest)
+    private readonly emailChangeRepository: Repository<EmailChangeRequest>,
   ) {}
 
   async login(user: User, rememberMe = false) {
@@ -54,8 +58,83 @@ export class AuthService {
 
   async me(userId: string) {
     const user = await this.userService.findById(userId);
-    if (!user) throw new UnauthorizedException();
-    return { success: true, data: this.toPublicUser(user) };
+    if (!user) throw new UnauthorizedException('Phiên đăng nhập không hợp lệ.');
+    return { success: true, data: this.userService.toUserDetail(user) };
+  }
+
+  async requestEmailChange(userId: string) {
+    const user = await this.userService.findById(userId);
+    if (!user) throw new UnauthorizedException('Phiên đăng nhập không hợp lệ.');
+    if (!user.email) throw new BadRequestException('Tài khoản chưa có địa chỉ email.');
+
+    const previousRequest = await this.emailChangeRepository.findOne({ where: { userId } });
+    if (previousRequest && Date.now() - previousRequest.createdAt.getTime() < 60_000) {
+      throw new HttpException('Vui lòng chờ một phút trước khi yêu cầu gửi lại mã OTP.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    await this.emailChangeRepository.delete({ userId });
+    const otp = randomInt(100000, 1000000).toString();
+    const request = this.emailChangeRepository.create({
+      id: randomUUID(),
+      userId,
+      newEmail: user.email.toLowerCase(),
+      otpHash: this.hashResetToken(otp),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      attempts: 0,
+      verifiedAt: null,
+    });
+    await this.emailChangeRepository.save(request);
+    try {
+      await this.mailService.sendEmailChangeOtp(user.email, otp);
+    } catch (error) {
+      await this.emailChangeRepository.delete({ id: request.id });
+      throw error;
+    }
+    return { success: true, message: 'Mã OTP đã được gửi đến email hiện tại.' };
+  }
+
+  async verifyEmailChange(userId: string, otp: string) {
+    const request = await this.emailChangeRepository.findOne({ where: { userId } });
+    if (!request || request.expiresAt.getTime() <= Date.now()) {
+      if (request) await this.emailChangeRepository.delete({ id: request.id });
+      throw new BadRequestException('Mã OTP xác minh email không hợp lệ hoặc đã hết hạn.');
+    }
+    if (request.attempts >= 5) {
+      await this.emailChangeRepository.delete({ id: request.id });
+      throw new BadRequestException('Bạn đã nhập sai quá số lần cho phép. Vui lòng yêu cầu mã OTP mới.');
+    }
+    if (!this.hashMatches(otp, request.otpHash)) {
+      request.attempts += 1;
+      await this.emailChangeRepository.save(request);
+      throw new BadRequestException('Mã OTP xác minh email không hợp lệ hoặc đã hết hạn.');
+    }
+    request.verifiedAt = new Date();
+    request.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await this.emailChangeRepository.save(request);
+    return { success: true, message: 'Xác minh email thành công. Vui lòng nhập email mới trong vòng 5 phút.' };
+  }
+
+  async completeEmailChange(userId: string, newEmail: string) {
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    const request = await this.emailChangeRepository.findOne({ where: { userId } });
+    if (!request || !request.verifiedAt || request.expiresAt.getTime() <= Date.now()) {
+      if (request) await this.emailChangeRepository.delete({ id: request.id });
+      throw new BadRequestException('Hãy xác minh mã OTP trước khi đổi email hoặc yêu cầu mã mới.');
+    }
+    if (request.newEmail === normalizedEmail) {
+      throw new BadRequestException('Email mới phải khác email hiện tại.');
+    }
+    const existingUser = await this.userService.findByEmail(normalizedEmail);
+    if (existingUser && existingUser.id !== userId) throw new ConflictException('Email này đã được sử dụng.');
+    const user = await this.userService.findById(userId);
+    if (!user) throw new UnauthorizedException('Phiên đăng nhập không hợp lệ.');
+    if (user.email?.toLowerCase() !== request.newEmail) {
+      await this.emailChangeRepository.delete({ id: request.id });
+      throw new BadRequestException('Email tài khoản đã thay đổi. Vui lòng yêu cầu mã OTP mới.');
+    }
+    user.email = normalizedEmail;
+    await this.userService.save(user);
+    await this.emailChangeRepository.delete({ id: request.id });
+    return { success: true, message: 'Cập nhật email thành công.' };
   }
 
   async refresh(refreshToken: string) {
@@ -65,21 +144,22 @@ export class AuthService {
         secret: this.config.get<string>('jwt.refreshSecret'), issuer: 'ncc-backend',
       });
     } catch (_error) {
-      throw new UnauthorizedException('Refresh token is invalid or expired');
+      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ hoặc đã hết hạn.');
     }
     if (claims.type !== 'refresh' || !claims.sid || !claims.sub) {
-      throw new UnauthorizedException('Refresh token is invalid');
+      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ.');
     }
 
     const session = await this.sessionRepository.findOne({ where: { id: claims.sid, userId: claims.sub } });
     if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now() ||
       !this.hashMatches(refreshToken, session.refreshTokenHash)) {
-      throw new UnauthorizedException('Refresh token is invalid or revoked');
+      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ hoặc phiên đăng nhập đã bị thu hồi.');
     }
 
     const user = await this.userService.findById(claims.sub);
-    if (!user) throw new UnauthorizedException();
-    if (user.status) throw new ForbiddenException('Account is locked');
+    if (!user) throw new UnauthorizedException('Tài khoản không tồn tại.');
+    if (user.status) throw new ForbiddenException('Tài khoản đã bị khóa.');
+    if (user.isActive === false) throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa.');
 
     const nextRefreshToken = await this.jwtService.signAsync(
       { sub: user.id, sid: session.id, type: 'refresh' },
@@ -95,91 +175,103 @@ export class AuthService {
 
   async logout(userId: string, sessionId: string) {
     await this.sessionRepository.update({ id: sessionId, userId, revokedAt: IsNull() }, { revokedAt: new Date() });
-    return { success: true, message: 'Logged out successfully.' };
+    return { success: true, message: 'Đăng xuất thành công.' };
   }
 
   async changePassword(userId: string, input: ChangePasswordDto) {
     const user = await this.userService.findByIdForPassword(userId);
     if (!user || !(await argon2.verify(user.password, input.currentPassword))) {
-      throw new BadRequestException('Current password is incorrect');
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác.');
     }
     if (input.currentPassword === input.newPassword) {
-      throw new BadRequestException('New password must differ from current password');
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại.');
     }
     user.password = await argon2.hash(input.newPassword);
     await this.userService.save(user);
     await this.sessionRepository.update({ userId, revokedAt: IsNull() }, { revokedAt: new Date() });
-    return { success: true, message: 'Password changed. Please log in again.' };
+    return { success: true, message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' };
   }
 
   async forgotPassword(email: string) {
-    const genericResponse = {
-      success: true,
-      message: 'If this email belongs to an account, a reset link will be sent.',
-    };
-    const resetPage = this.config.get<string>('mail.resetPage');
-    if (!resetPage) {
-      throw new ServiceUnavailableException('Password reset page URL is not configured');
-    }
-    let resetUrl: URL;
-    try {
-      resetUrl = new URL(resetPage);
-    } catch (_error) {
-      throw new ServiceUnavailableException('Password reset page URL is invalid');
-    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.userService.findByEmail(normalizedEmail);
+    if (!user) throw new NotFoundException('Email chưa đăng ký trên hệ thống. Vui lòng thử lại.');
 
-    const user = await this.userService.findByEmail(email);
-    if (!user) return genericResponse;
-
-    const token = randomBytes(32).toString('hex');
-    user.resetPasswordTokenHash = this.hashResetToken(token);
-    user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const otp = randomInt(100000, 1000000).toString();
+    user.resetPasswordTokenHash = this.hashResetOtp(otp);
+    user.resetPasswordExpiresAt = new Date(Date.now() + PASSWORD_RESET_OTP_TTL_MINUTES * 60 * 1000);
+    user.resetPasswordAttempts = 0;
     await this.userService.save(user);
 
-    resetUrl.searchParams.set('token', token);
-    resetUrl.searchParams.set('email', email);
-
     try {
-      await this.mailService.sendPasswordReset(email, resetUrl.toString());
+      await this.mailService.sendPasswordResetOtp(normalizedEmail, otp, user.username, user.fullname);
     } catch (error) {
       user.resetPasswordTokenHash = null;
       user.resetPasswordExpiresAt = null;
+      user.resetPasswordAttempts = 0;
       await this.userService.save(user);
       throw error;
     }
 
-    return genericResponse;
+    return { success: true, message: 'Gửi email thành công.' };
   }
 
   async resetPassword(input: ResetPasswordDto) {
     const user = await this.userService.findByEmailForReset(input.email);
-    const submittedHash = this.hashResetToken(input.token);
     const storedHash = user?.resetPasswordTokenHash;
-    const hashMatches = !!storedHash && timingSafeEqual(
-      Buffer.from(submittedHash, 'hex'),
-      Buffer.from(storedHash, 'hex'),
-    );
 
     if (
       !user ||
-      !hashMatches ||
       !user.resetPasswordExpiresAt ||
       user.resetPasswordExpiresAt.getTime() <= Date.now()
     ) {
-      throw new BadRequestException('Reset token is invalid or expired');
+      throw new BadRequestException('Mã OTP khôi phục mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    if (user.resetPasswordAttempts >= PASSWORD_RESET_OTP_MAX_ATTEMPTS || !storedHash) {
+      throw new BadRequestException('Mã OTP khôi phục mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    if (input.newPassword !== input.confirmNewPassword) {
+      throw new BadRequestException('Mật khẩu mới và mật khẩu xác nhận không khớp.');
+    }
+
+    if (!this.hashMatchesOtp(input.otpCode, storedHash)) {
+      user.resetPasswordAttempts += 1;
+      if (user.resetPasswordAttempts >= PASSWORD_RESET_OTP_MAX_ATTEMPTS) {
+        user.resetPasswordTokenHash = null;
+        user.resetPasswordExpiresAt = null;
+      }
+      await this.userService.save(user);
+      throw new BadRequestException('Mã OTP khôi phục mật khẩu không hợp lệ hoặc đã hết hạn.');
     }
 
     user.password = await argon2.hash(input.newPassword);
     user.resetPasswordTokenHash = null;
     user.resetPasswordExpiresAt = null;
+    user.resetPasswordAttempts = 0;
     await this.userService.save(user);
     await this.sessionRepository.update({ userId: user.id, revokedAt: IsNull() }, { revokedAt: new Date() });
 
-    return { success: true, message: 'Password has been reset successfully.' };
+    return { success: true, message: 'Khôi phục mật khẩu thành công. Vui lòng đăng nhập lại.' };
   }
 
   private hashResetToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
+  }
+
+  private hashResetOtp(otp: string) {
+    const secret = this.config.get<string>('jwt.secret');
+    if (!secret) throw new ServiceUnavailableException('Chưa cấu hình khóa bí mật JWT.');
+    return createHmac('sha256', secret)
+      .update(otp)
+      .digest('hex');
+  }
+
+  private hashMatchesOtp(otp: string, storedHash: string) {
+    const submitted = Buffer.from(this.hashResetOtp(otp), 'hex');
+    const stored = Buffer.from(storedHash, 'hex');
+    return submitted.length === stored.length && timingSafeEqual(submitted, stored);
   }
 
   private hashMatches(token: string, storedHash: string) {
@@ -195,7 +287,4 @@ export class AuthService {
     );
   }
 
-  private toPublicUser(user: User) {
-    return { id: user.id, username: user.username, email: user.email, role: user.role.role };
-  }
 }

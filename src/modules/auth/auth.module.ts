@@ -10,11 +10,16 @@ import { MailService } from './mail.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthSession } from './auth-session.entity';
+import { EmailChangeRequest } from './email-change-request.entity';
+import { UserController } from '../user/user.controller';
+import { RoleController } from '../role/role.controller';
+import { Role } from '../role/role.entity';
+import { RoleService } from '../role/role.service';
 
 @Module({
   imports: [
     UserModule,
-    TypeOrmModule.forFeature([AuthSession]),
+    TypeOrmModule.forFeature([AuthSession, EmailChangeRequest, Role]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -25,8 +30,8 @@ import { AuthSession } from './auth-session.entity';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, LocalStrategy, JwtAuthGuard, MailService],
+  controllers: [AuthController, UserController, RoleController],
+  providers: [AuthService, LocalStrategy, JwtAuthGuard, MailService, RoleService],
   exports: [AuthService],
 })
 export class AuthModule {}

@@ -17,6 +17,33 @@ export class User {
   @Index({ unique: true })
   email: string;
 
+  @Column({ nullable: true })
+  fullname: string;
+
+  @Column({ nullable: true })
+  avatarUrl: string;
+
+  @Column({ type: 'date', nullable: true })
+  birthDate: string;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  gender: 'MALE' | 'FEMALE';
+
+  @Column({ nullable: true })
+  position: string;
+
+  @Column({ nullable: true })
+  province: string;
+
+  @Column({ nullable: true })
+  ward: string;
+
+  @Column({ nullable: true })
+  address: string;
+
+  @Column({ default: true })
+  isActive: boolean;
+
   @Column({ default: false })
   status: boolean;
 
@@ -25,6 +52,9 @@ export class User {
 
   @Column({ nullable: true, select: false })
   resetPasswordExpiresAt: Date;
+
+  @Column({ default: 0 })
+  resetPasswordAttempts: number;
 
   @ManyToOne(() => Role, (role) => role.users, { nullable: false })
   @JoinColumn({ name: 'roleId' })

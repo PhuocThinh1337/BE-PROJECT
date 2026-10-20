@@ -6,7 +6,7 @@ export class LocalAuthGuard extends AuthGuard('local') {
   canActivate(context: ExecutionContext) {
     const { username, password } = context.switchToHttp().getRequest().body || {};
     if (typeof username !== 'string' || !username.trim() || typeof password !== 'string' || !password) {
-      throw new BadRequestException('username and password are required');
+      throw new BadRequestException('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
     }
     return super.canActivate(context);
   }

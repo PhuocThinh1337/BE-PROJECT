@@ -17,16 +17,16 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const authorization = request.headers.authorization || '';
     const [scheme, token] = authorization.split(' ');
-    if (scheme !== 'Bearer' || !token) throw new UnauthorizedException('Bearer access token is required');
+    if (scheme !== 'Bearer' || !token) throw new UnauthorizedException('Vui lòng cung cấp mã truy cập theo dạng Bearer.');
 
     let claims: any;
     try {
       claims = await this.jwtService.verifyAsync(token, {
         secret: this.config.get<string>('jwt.secret'), issuer: 'ncc-backend',
       });
-      if (claims.type !== 'access' || !claims.sub || !claims.sid) throw new Error('Invalid access token');
+      if (claims.type !== 'access' || !claims.sub || !claims.sid) throw new Error('Mã truy cập không hợp lệ.');
     } catch (_error) {
-      throw new UnauthorizedException('Access token is invalid or expired');
+      throw new UnauthorizedException('Mã truy cập không hợp lệ hoặc đã hết hạn.');
     }
 
     const session = await this.sessions.findOne({
@@ -34,9 +34,10 @@ export class JwtAuthGuard implements CanActivate {
       relations: ['user', 'user.role'],
     });
     if (!session || session.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Session is revoked or expired');
+      throw new UnauthorizedException('Phiên đăng nhập đã bị thu hồi hoặc hết hạn.');
     }
-    if (!session.user || session.user.status) throw new ForbiddenException('Account is locked');
+    if (!session.user || session.user.status) throw new ForbiddenException('Tài khoản đã bị khóa.');
+    if (session.user.isActive === false) throw new ForbiddenException('Tài khoản đã bị vô hiệu hóa.');
     request.user = {
       id: session.user.id,
       sessionId: claims.sid,

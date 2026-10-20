@@ -5,19 +5,19 @@ import { Transform } from 'class-transformer';
 export class LoginDto {
   @ApiProperty({ example: 'so_admin' })
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
+  @IsString({ message: 'Tên đăng nhập phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập tên đăng nhập.' })
+  @MaxLength(100, { message: 'Tên đăng nhập không được vượt quá 100 ký tự.' })
   username: string;
 
   @ApiProperty({ example: 'Test@123456' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(128)
+  @IsString({ message: 'Mật khẩu phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập mật khẩu.' })
+  @MaxLength(128, { message: 'Mật khẩu không được vượt quá 128 ký tự.' })
   password: string;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({ message: 'Ghi nhớ đăng nhập phải có giá trị true hoặc false.' })
   rememberMe?: boolean;
 }

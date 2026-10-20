@@ -11,6 +11,5 @@ export const load = () => ({
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
     from: process.env.SMTP_FROM,
-    resetPage: process.env.FRONTEND_RESET_PASSWORD_URL,
   },
 });

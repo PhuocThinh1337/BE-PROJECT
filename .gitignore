@@ -34,4 +34,5 @@ lerna-debug.log*
 .env
 .env.*
 !.env.example
+!.env.test.example
 yarn.lock

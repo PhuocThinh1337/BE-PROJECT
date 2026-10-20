@@ -32,9 +32,12 @@ Swagger docs: `http://localhost:3001/api/v1/api-docs`.
 - `GET /auth/me`: current account; requires `Authorization: Bearer <accessToken>`.
 - `POST /auth/refresh`: accepts `{ "refreshToken": "..." }`, rotates it, and issues a new access token.
 - `POST /auth/logout`: revokes the current session; requires a bearer access token.
-- `POST /auth/forgot-password`: sends a one-time reset link by email.
-- `POST /auth/reset-password`: consumes the reset token and revokes existing sessions.
+- `POST /auth/forgot-password`: emails a six-digit OTP.
+- `POST /auth/reset-password`: validates the OTP and password confirmation, then revokes existing sessions.
 - `PATCH /auth/change-password`: requires a bearer access token and current/new password; revokes all sessions after success.
+- `POST /auth/change-email/request-otp`: sends an OTP to the current email address.
+- `POST /auth/change-email/verify-otp`: verifies the current email OTP; body `{ "otpCode": "123456" }`.
+- `PATCH /auth/change-email`: saves `{ "newEmail": "new-address@example.com" }` after OTP verification.
 
 Refresh tokens are stored only as hashes in the `auth_sessions` table. Access tokens expire after 15 minutes. Logout and password changes revoke the corresponding database sessions, so protected requests reject those tokens immediately.
 
@@ -44,7 +47,7 @@ For development, `VNA_DB_SYNCHRONIZE=true` creates/updates tables automatically.
 
 ## Password reset email
 
-Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `.env`. Port 587 normally uses `SMTP_SECURE=false`; port 465 normally uses `true`. Use the SMTP credentials or app password supplied by your email provider. Set `FRONTEND_RESET_PASSWORD_URL` to the page that reads the `token` and `email` query parameters.
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `.env`. Port 587 normally uses `SMTP_SECURE=false`; port 465 normally uses `true`. Use the SMTP credentials or app password supplied by your email provider. The API emails a six-digit OTP for the frontend reset form.
 
 Request a reset with `POST /api/v1/auth/forgot-password`:
 
@@ -52,13 +55,14 @@ Request a reset with `POST /api/v1/auth/forgot-password`:
 { "email": "your-inbox@example.com" }
 ```
 
-The reset link expires after 15 minutes and can be used once. The frontend submits it to `POST /api/v1/auth/reset-password`:
+The OTP expires after 5 minutes and can be used once. Unknown email addresses return 404, and malformed addresses return 400. The recovery email includes the account username and expiry. The frontend submits the OTP to `POST /api/v1/auth/reset-password`:
 
 ```json
 {
   "email": "your-inbox@example.com",
-  "token": "token-from-the-email-link",
-  "newPassword": "NewTest@123456"
+  "otpCode": "123456",
+  "newPassword": "NewTest@123456",
+  "confirmNewPassword": "NewTest@123456"
 }
 ```
 
