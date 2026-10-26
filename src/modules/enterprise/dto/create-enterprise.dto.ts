@@ -1,0 +1,32 @@
+﻿import { Transform } from 'class-transformer';
+import { IsDateString, IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+
+const emptyToNull = ({ value }: { value: unknown }) => value === '' ? null : value;
+
+export class CreateEnterpriseDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @IsNotEmpty() @Matches(/^\d{10}$/)
+  taxcode: string;
+
+  @IsString() @IsNotEmpty() @MaxLength(200)
+  name: string;
+
+  @IsOptional() @Transform(emptyToNull) @IsDateString()
+  licenseIssueDate?: string | null;
+
+  @IsUUID('4') businessTypeId: string;
+  @IsUUID('4') businessIndustryId: string;
+  @IsString() @IsNotEmpty() @MaxLength(150) province: string;
+  @IsString() @IsNotEmpty() @MaxLength(150) ward: string;
+
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500) address?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(200) foreignName?: string | null;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().toLowerCase() : value)
+  @IsEmail() @MaxLength(254) email: string;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(30) officePhone?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(150) operatingProvince?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(150) operatingWard?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500) businessLocation?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(150) representative?: string | null;
+  @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(30) representativePhone?: string | null;
+}

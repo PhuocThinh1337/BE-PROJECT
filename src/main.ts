@@ -7,6 +7,9 @@ import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
+  });
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({
@@ -48,3 +51,9 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+Name        Mode  
+----        ----  
+desktop.ini ---h--
+
+
