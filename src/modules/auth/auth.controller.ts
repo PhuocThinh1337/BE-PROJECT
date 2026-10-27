@@ -52,11 +52,11 @@ export class AuthController {
     return this.authService.initializePassword(request.user.id, body.password);
   }
 
-  @Post('change-email')
+  @Post('change-email/request-otp')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  changeEmail(@Req() request: any, @Body() body: ChangeEmailDto) {
-    return this.authService.requestEmailChange(request.user.id, body.newEmail);
+  requestEmailChange(@Req() request: any) {
+    return this.authService.requestEmailChange(request.user.id);
   }
 
   @Post('change-email/verify-otp')
@@ -66,8 +66,22 @@ export class AuthController {
     return this.authService.verifyEmailChange(request.user.id, body.otpCode);
   }
 
+  @Patch('change-email')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  changeEmail(@Req() request: any, @Body() body: ChangeEmailDto) {
+    return this.authService.completeEmailChange(request.user.id, body.newEmail);
+  }
+
   @Post('forgot-password')
   forgotPassword(@Body() body: ForgotPasswordDto) { return this.authService.forgotPassword(body.email); }
+
+  @Post('resend-forgot-password-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend password recovery OTP' })
+  resendForgotPasswordOtp(@Body() body: ForgotPasswordDto) {
+    return this.authService.forgotPassword(body.email);
+  }
 
   @Post('reset-password')
   resetPassword(@Body() body: ResetPasswordDto) { return this.authService.resetPassword(body); }
