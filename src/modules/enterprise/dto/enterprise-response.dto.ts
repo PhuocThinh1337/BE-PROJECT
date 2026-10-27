@@ -1,5 +1,6 @@
 ﻿export class EnterpriseResponseDto {
   enterpriseId: string;
+  userId: string;
   name: string;
   taxCode: string;
   businessType: string;

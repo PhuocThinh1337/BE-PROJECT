@@ -6,7 +6,7 @@ const emptyToNull = ({ value }: { value: unknown }) => value === '' ? null : val
 export class CreateEnterpriseDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @IsNotEmpty() @Matches(/^\d{10}$/)
-  taxcode: string;
+  taxCode: string;
 
   @IsString() @IsNotEmpty() @MaxLength(200)
   name: string;

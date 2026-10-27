@@ -51,9 +51,9 @@ export class EnterpriseController {
     { name: 'otherDocument', maxCount: 1 },
   ], { limits: { fileSize: 5 * 1024 * 1024, files: 2 }, fileFilter: enterpriseFileFilter as any }))
   @ApiConsumes('multipart/form-data')
-  @ApiBody({ schema: { type: 'object', required: ['taxcode', 'name', 'businessTypeId', 'businessIndustryId', 'province', 'ward', 'email'], properties: {
+  @ApiBody({ schema: { type: 'object', required: ['taxCode', 'name', 'businessTypeId', 'businessIndustryId', 'province', 'ward', 'email'], properties: {
     name: { type: 'string' }, licenseIssueDate: { type: 'string', format: 'date', nullable: true },
-    taxcode: { type: 'string', pattern: '^\\d{10}$' },
+    taxCode: { type: 'string', pattern: '^\\d{10}$' },
     businessTypeId: { type: 'string', format: 'uuid' }, businessIndustryId: { type: 'string', format: 'uuid' },
     province: { type: 'string' }, ward: { type: 'string' }, address: { type: 'string', nullable: true },
     foreignName: { type: 'string', nullable: true }, email: { type: 'string', format: 'email' },

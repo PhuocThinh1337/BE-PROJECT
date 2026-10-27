@@ -54,7 +54,7 @@ export class EnterpriseService {
   }
 
   async create(input: CreateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
-    const taxCode = input.taxcode.trim();
+    const taxCode = input.taxCode.trim();
     if (await this.enterprises.findOne({ where: { taxCode } })) throw new ConflictException('Tax code is already registered.');
     const role = await this.roles.findOne({ where: { role: 'DOANH_NGHIEP' } });
     if (!role) throw new NotFoundException('Enterprise role has not been seeded.');
@@ -123,7 +123,7 @@ export class EnterpriseService {
 
   private toResponse(record: Enterprise) {
     return {
-      enterpriseId: record.id, name: record.name, taxCode: record.taxCode,
+      enterpriseId: record.id, userId: record.userId, name: record.name, taxCode: record.taxCode,
       businessType: record.businessType?.name || '',
       businessIndustry: record.businessIndustry?.name || '', ward: record.ward,
       isActive: record.user?.isActive ?? false,
