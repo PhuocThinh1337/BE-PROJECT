@@ -13,6 +13,7 @@ import { Enterprise } from './enterprise.entity';
 import { EnterpriseFile, storeEnterpriseFile } from './enterprise-upload';
 import { PageResponseDto } from '../../commons/dto/page-response.dto';
 import { EnterpriseResponseDto } from './dto/enterprise-response.dto';
+import { EnterpriseDetailResponseDto } from './dto/enterprise-detail-response.dto';
 
 @Injectable()
 export class EnterpriseService {
@@ -47,10 +48,10 @@ export class EnterpriseService {
     };
   }
 
-  async get(id: string) {
+  async get(id: string): Promise<{ message: string; data: EnterpriseDetailResponseDto }> {
     const record = await this.enterprises.findOne({ where: { id }, relations: ['user', 'businessType', 'businessIndustry'] });
     if (!record) throw new NotFoundException('Enterprise not found.');
-    return { message: 'Enterprise details retrieved successfully', data: this.toResponse(record) };
+    return { message: 'Enterprise details retrieved successfully', data: this.toDetailResponse(record) };
   }
 
   async create(input: CreateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
@@ -127,6 +128,29 @@ export class EnterpriseService {
       businessType: record.businessType?.name || '',
       businessIndustry: record.businessIndustry?.name || '', ward: record.ward,
       isActive: record.user?.isActive ?? false,
+    };
+  }
+
+  private toDetailResponse(record: Enterprise): EnterpriseDetailResponseDto {
+    return {
+      name: record.name,
+      taxCode: record.taxCode,
+      licenseIssueDate: record.licenseIssueDate,
+      businessTypeId: record.businessTypeId,
+      businessIndustryId: record.businessIndustryId,
+      province: record.province,
+      ward: record.ward,
+      address: record.address,
+      foreignName: record.foreignName,
+      email: record.email,
+      officePhone: record.officePhone,
+      operatingProvince: record.operatingProvince,
+      operatingWard: record.operatingWard,
+      businessLocation: record.businessLocation,
+      representative: record.representative,
+      representativePhone: record.representativePhone,
+      businessLicense: record.businessLicenseUrl ? { url: record.businessLicenseUrl } : null,
+      otherDocument: record.otherDocumentUrl ? { url: record.otherDocumentUrl } : null,
     };
   }
 }
