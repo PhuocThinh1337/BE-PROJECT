@@ -166,13 +166,12 @@ export class UserService {
     if (!user) throw new NotFoundException('Không tìm thấy người dùng.');
     user.password = await argon2.hash('12345678');
     await this.userRepository.save(user);
-    await this.sessionRepository
-      .createQueryBuilder()
-      .update(AuthSession)
-      .set({ revokedAt: new Date() })
-      .where('"userId" = :targetUserId', { targetUserId: id })
-      .andWhere('"revokedAt" IS NULL')
-      .execute();
+    // Revoke sessions by the target account's FK. The administrator who
+    // initiated this request has a different userId and must remain logged in.
+    await this.sessionRepository.update(
+      { userId: id, revokedAt: IsNull() },
+      { revokedAt: new Date() },
+    );
     return { success: true, message: 'Đã khởi tạo mật khẩu. Tài khoản cần đăng nhập lại.' };
   }
 
