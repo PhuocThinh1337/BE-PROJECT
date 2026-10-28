@@ -45,7 +45,7 @@ export class AuthService {
     const accessToken = await this.createAccessToken(user, sessionId);
     return {
       success: true,
-      message: '\u0110\u0103ng nh\u1eadp th\u00e0nh c\u00f4ng',
+      message: 'Đăng nhập thành công.',
       data: {
         accessToken,
         refreshToken,
@@ -110,7 +110,7 @@ export class AuthService {
     request.verifiedAt = new Date();
     request.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     await this.emailChangeRepository.save(request);
-    return { success: true, message: 'Xác minh email thành công. Vui lòng nhập email mới trong vòng 5 phút.' };
+    return { success: true, message: 'Xác minh email thành công. Vui lòng nhập email mới trong 5 phút.' };
   }
 
   async completeEmailChange(userId: string, newEmail: string) {
@@ -144,16 +144,16 @@ export class AuthService {
         secret: this.config.get<string>('jwt.refreshSecret'), issuer: 'ncc-backend',
       });
     } catch (_error) {
-      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ hoặc đã hết hạn.');
+      throw new UnauthorizedException('Mã làm mới không hợp lệ hoặc đã hết hạn.');
     }
     if (claims.type !== 'refresh' || !claims.sid || !claims.sub) {
-      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ.');
+      throw new UnauthorizedException('Mã làm mới không hợp lệ.');
     }
 
     const session = await this.sessionRepository.findOne({ where: { id: claims.sid, userId: claims.sub } });
     if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now() ||
       !this.hashMatches(refreshToken, session.refreshTokenHash)) {
-      throw new UnauthorizedException('Mã làm mới phiên không hợp lệ hoặc phiên đăng nhập đã bị thu hồi.');
+      throw new UnauthorizedException('Mã làm mới không hợp lệ hoặc phiên đăng nhập đã bị thu hồi.');
     }
 
     const user = await this.userService.findById(claims.sub);
@@ -225,7 +225,7 @@ export class AuthService {
       throw error;
     }
 
-    return { success: true, message: 'Gửi email thành công.' };
+    return { success: true, message: 'Mã OTP khôi phục mật khẩu đã được gửi đến email.' };
   }
 
   async resetPassword(input: ResetPasswordDto) {

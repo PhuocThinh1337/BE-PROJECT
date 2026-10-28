@@ -9,7 +9,7 @@ import { UpdateEnterpriseDto } from './dto/update-enterprise.dto';
 import { EnterpriseFile, enterpriseFileFilter } from './enterprise-upload';
 import { EnterpriseService } from './enterprise.service';
 
-@ApiTags('Enterprises')
+@ApiTags('Doanh nghiệp')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('enterprises')
@@ -25,21 +25,21 @@ export class EnterpriseController {
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'size', required: false, type: Number })
-  @ApiOperation({ summary: 'Get a filtered, paginated enterprise list' })
+  @ApiOperation({ summary: 'Lấy danh sách doanh nghiệp có lọc và phân trang' })
   list(@Query() query: ListEnterprisesQueryDto, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.service.list(query);
   }
 
   @Delete()
-  @ApiOperation({ summary: 'Delete one or more enterprises and their accounts' })
+  @ApiOperation({ summary: 'Xóa một hoặc nhiều doanh nghiệp và tài khoản liên quan' })
   deleteMany(@Body() body: DeleteEnterprisesDto, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.service.deleteMany(body);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get enterprise details' })
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết doanh nghiệp' })
   get(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.service.get(id);
@@ -62,7 +62,7 @@ export class EnterpriseController {
     representative: { type: 'string', nullable: true }, representativePhone: { type: 'string', nullable: true },
     businessLicense: { type: 'string', format: 'binary' }, otherDocument: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Create enterprise and its tax-code login account' })
+  @ApiOperation({ summary: 'Tạo doanh nghiệp và tài khoản đăng nhập bằng mã số thuế' })
   create(@Body() body: CreateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.service.create(body, files?.businessLicense?.[0], files?.otherDocument?.[0]);
@@ -84,13 +84,13 @@ export class EnterpriseController {
     representative: { type: 'string', nullable: true }, representativePhone: { type: 'string', nullable: true },
     businessLicense: { type: 'string', format: 'binary' }, otherDocument: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Update enterprise and its documents' })
+  @ApiOperation({ summary: 'Cập nhật doanh nghiệp và giấy tờ đính kèm' })
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.service.update(id, body, files?.businessLicense?.[0], files?.otherDocument?.[0]);
   }
 
   private assertSo(role: string) {
-    if (role !== 'SO') throw new ForbiddenException('Only SO users can manage enterprises.');
+    if (role !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được quản lý doanh nghiệp.');
   }
 }

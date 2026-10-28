@@ -10,7 +10,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
 import { storeAvatar, UploadedAvatar } from './avatar-upload';
 
-@ApiTags('Users')
+@ApiTags('Người dùng')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('users')
@@ -18,7 +18,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get a filtered, paginated user list' })
+  @ApiOperation({ summary: 'Lấy danh sách người dùng có lọc và phân trang' })
   @ApiQuery({ name: 'fullname', required: false })
   @ApiQuery({ name: 'username', required: false })
   @ApiQuery({ name: 'email', required: false })
@@ -33,7 +33,7 @@ export class UserController {
   }
 
   @Delete()
-  @ApiOperation({ summary: 'Delete one or more users' })
+  @ApiOperation({ summary: 'Xóa một hoặc nhiều người dùng' })
   deleteMany(@Body() body: DeleteUsersDto, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.userService.deleteUsers(body.userIds);
@@ -57,7 +57,7 @@ export class UserController {
     isActive: { type: 'boolean' },
     avatar: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Create a user' })
+  @ApiOperation({ summary: 'Tạo người dùng' })
   async create(@Body() body: CreateUserDto, @UploadedFile() avatar: UploadedAvatar | undefined, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.userService.createUser(body, avatar);
@@ -77,28 +77,28 @@ export class UserController {
     address: { type: 'string', nullable: true },
     avatar: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Update the current user profile' })
+  @ApiOperation({ summary: 'Cập nhật thông tin tài khoản hiện tại' })
   async updateMe(@Req() request: any, @Body() body: UpdateMeDto, @UploadedFile() avatar: UploadedAvatar | undefined) {
     const avatarUrl = avatar ? await storeAvatar(avatar) : undefined;
     return this.userService.updateMyProfile(request.user.id, body, avatarUrl);
   }
 
   @Post(':id/initialize-password')
-  @ApiOperation({ summary: 'Reset user password to the initial value and revoke all sessions' })
+  @ApiOperation({ summary: 'Khởi tạo lại mật khẩu và thu hồi các phiên đăng nhập của người dùng' })
   initializePassword(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.userService.initializeUserPassword(id);
   }
 
   @Put(':id/status')
-  @ApiOperation({ summary: 'Toggle user active status' })
+  @ApiOperation({ summary: 'Đổi trạng thái hoạt động của người dùng' })
   toggleStatus(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.userService.toggleUserStatus(id);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get user details' })
+  @ApiOperation({ summary: 'Lấy thông tin chi tiết người dùng' })
   getDetail(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     this.assertSo(request.user.role);
     return this.userService.getUserDetail(id);
@@ -119,7 +119,7 @@ export class UserController {
     isActive: { type: 'boolean' },
     avatar: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Update a user profile and role' })
+  @ApiOperation({ summary: 'Cập nhật thông tin và vai trò người dùng' })
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateUserDto, @UploadedFile() avatar: UploadedAvatar | undefined, @Req() request: any) {
     this.assertSo(request.user.role);
     if (!avatar) return this.userService.updateUser(id, body);
@@ -127,6 +127,6 @@ export class UserController {
   }
 
   private assertSo(role: string) {
-    if (role !== 'SO') throw new ForbiddenException('Only SO users can manage users.');
+    if (role !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được quản lý người dùng.');
   }
 }

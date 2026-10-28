@@ -77,7 +77,7 @@ export class UserService {
     if (isActive !== undefined) builder.andWhere('user.isActive = :isActive', { isActive });
     const [users, totalElements] = await builder.getManyAndCount();
     return {
-      message: 'Lấy danh sách người dùng thành công',
+      message: 'Lấy danh sách người dùng thành công.',
       data: users.map((user) => ({
         userId: user.id,
         fullname: user.fullname || '',
@@ -93,7 +93,7 @@ export class UserService {
 
   async deleteUsers(userIds: string[]) {
     const result = await this.userRepository.delete({ id: In(userIds) });
-    return { message: 'Xóa người dùng thành công', data: { deletedCount: result.affected || 0 } };
+    return { message: 'Xóa người dùng thành công.', data: { deletedCount: result.affected || 0 } };
   }
 
   async toggleUserStatus(id: string) {
@@ -104,7 +104,7 @@ export class UserService {
     if (!user.isActive) {
       await this.sessionRepository.update({ userId: id, revokedAt: IsNull() }, { revokedAt: new Date() });
     }
-    return { message: 'Cập nhật trạng thái người dùng thành công', data: { userId: user.id, isActive: user.isActive } };
+    return { message: 'Cập nhật trạng thái người dùng thành công.', data: { userId: user.id, isActive: user.isActive } };
   }
 
   async createUser(input: CreateUserDto, avatar?: UploadedAvatar) {
@@ -186,11 +186,11 @@ export class UserService {
     const user = await this.findById(id);
     if (!user) throw new NotFoundException('Không tìm thấy người dùng.');
     const role = await this.roleRepository.findOne({ where: { id: input.roleId } });
-    if (!role) throw new NotFoundException('Role not found.');
+    if (!role) throw new NotFoundException('Không tìm thấy vai trò.');
     const usernameMatchesRole = role.role === 'DOANH_NGHIEP'
       ? /^\d{10}$/.test(user.username)
       : role.role === 'SO' && /^VNA\d{8}$/.test(user.username);
-    if (!usernameMatchesRole) throw new ConflictException('The username format does not match the selected role.');
+    if (!usernameMatchesRole) throw new ConflictException('Định dạng tên đăng nhập không phù hợp với vai trò đã chọn.');
 
     user.fullname = input.fullname;
     if (input.birthDate !== undefined) user.birthDate = input.birthDate;

@@ -7,7 +7,7 @@ const user_entity_1 = require("../modules/user/user.entity");
 async function seedAuthUsers() {
     require('dotenv').config();
     if (process.env.NODE_ENV !== 'development') {
-        throw new Error('Auth demo accounts can only be seeded in development.');
+        throw new Error('Chỉ được tạo tài khoản mẫu trong môi trường phát triển.');
     }
     const connection = await (0, typeorm_1.createConnection)({
         type: 'postgres',

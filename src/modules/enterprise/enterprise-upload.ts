@@ -23,7 +23,7 @@ const allowed: Record<string, string[]> = {
 export function enterpriseFileFilter(_request: unknown, file: EnterpriseFile, callback: (error: Error | null, accept: boolean) => void) {
   const extension = extname(file.originalname).toLowerCase();
   if (!allowed[file.mimetype]?.includes(extension)) {
-    callback(new BadRequestException('Only PNG, JPG, JPEG, PDF, DOC, or DOCX files are accepted.'), false);
+    callback(new BadRequestException('Chỉ chấp nhận tệp PNG, JPG, JPEG, PDF, DOC hoặc DOCX.'), false);
     return;
   }
   callback(null, true);
@@ -31,7 +31,7 @@ export function enterpriseFileFilter(_request: unknown, file: EnterpriseFile, ca
 
 export async function storeEnterpriseFile(file: EnterpriseFile): Promise<StoredEnterpriseFile> {
   if (file.size > 5 * 1024 * 1024 || !allowed[file.mimetype]?.includes(extname(file.originalname).toLowerCase())) {
-    throw new BadRequestException('The file is invalid or exceeds the 5 MB limit.');
+    throw new BadRequestException('Tệp không hợp lệ hoặc vượt quá dung lượng tối đa 5 MB.');
   }
   const directory = join(process.cwd(), 'uploads', 'enterprises');
   const fileId = randomUUID();

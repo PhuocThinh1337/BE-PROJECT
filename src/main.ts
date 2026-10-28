@@ -1,9 +1,45 @@
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+﻿import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import * as express from 'express';
 import { join } from 'path';
+
+const validationFieldNames: Record<string, string> = {
+  username: 'Tên đăng nhập', fullname: 'Họ và tên', password: 'Mật khẩu',
+  currentPassword: 'Mật khẩu hiện tại', newPassword: 'Mật khẩu mới',
+  confirmNewPassword: 'Mật khẩu xác nhận', email: 'Email', newEmail: 'Email mới',
+  otpCode: 'Mã OTP', roleId: 'Vai trò', businessTypeId: 'Loại hình kinh doanh',
+  businessIndustryId: 'Ngành nghề kinh doanh', taxCode: 'Mã số thuế',
+  name: 'Tên', province: 'Tỉnh/thành phố', ward: 'Phường/xã', address: 'Địa chỉ',
+  page: 'Số trang', size: 'Kích thước trang', isActive: 'Trạng thái hoạt động',
+  userIds: 'Danh sách người dùng', enterpriseIds: 'Danh sách doanh nghiệp',
+  birthDate: 'Ngày sinh', gender: 'Giới tính', position: 'Chức vụ',
+};
+
+function translateValidationMessage(property: string, constraint: string, original: string) {
+  if (/[À-ỹĐđ]/.test(original)) return original;
+  const field = validationFieldNames[property] || `Trường "${property}"`;
+  const messages: Record<string, string> = {
+    isString: `${field} phải là chuỗi ký tự.`,
+    isNotEmpty: `${field} không được để trống.`,
+    isEmail: `${field} phải là địa chỉ email hợp lệ.`,
+    isUUID: `${field} phải có định dạng UUID hợp lệ.`,
+    matches: `${field} không đúng định dạng.`,
+    maxLength: `${field} vượt quá độ dài tối đa cho phép.`,
+    minLength: `${field} chưa đạt độ dài tối thiểu.`,
+    isBoolean: `${field} phải có giá trị đúng hoặc sai.`,
+    isDateString: `${field} phải là ngày hợp lệ.`,
+    isEnum: `${field} không có giá trị hợp lệ.`,
+    isArray: `${field} phải là danh sách.`,
+    arrayNotEmpty: `${field} không được để trống.`,
+    isInt: `${field} phải là số nguyên.`,
+    min: `${field} nhỏ hơn giá trị tối thiểu cho phép.`,
+    max: `${field} vượt quá giá trị tối đa cho phép.`,
+    isJWT: `${field} không đúng định dạng.`,
+  };
+  return messages[constraint] || `${field} không hợp lệ.`;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -25,7 +61,7 @@ async function bootstrap() {
           messages.push(
             constraint === 'whitelistValidation'
               ? `Trường "${error.property}" không được hỗ trợ.`
-              : constraints[constraint],
+              : translateValidationMessage(error.property, constraint, constraints[constraint]),
           );
         });
       });
@@ -51,9 +87,5 @@ async function bootstrap() {
 }
 
 bootstrap();
-
-Name        Mode  
-----        ----  
-desktop.ini ---h--
 
 

@@ -11,7 +11,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LocalAuthGuard } from './local-auth.guard';
 
-@ApiTags('Auth')
+@ApiTags('Xác thực')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -19,7 +19,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(LocalAuthGuard)
-  @ApiOperation({ summary: 'Login with username and password' })
+  @ApiOperation({ summary: 'Đăng nhập bằng tên đăng nhập và mật khẩu' })
   login(@Req() request: any, @Body() body: LoginDto) {
     return this.authService.login(request.user, body.rememberMe);
   }
@@ -47,7 +47,7 @@ export class AuthController {
   @Post('initialize-password')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Initialize password for the current user or enterprise account' })
+  @ApiOperation({ summary: 'Khởi tạo mật khẩu cho tài khoản hiện tại' })
   initializePassword(@Req() request: any, @Body() body: InitializePasswordDto) {
     return this.authService.initializePassword(request.user.id, body.password);
   }
@@ -78,7 +78,7 @@ export class AuthController {
 
   @Post('resend-forgot-password-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resend password recovery OTP' })
+  @ApiOperation({ summary: 'Gửi lại mã OTP khôi phục mật khẩu' })
   resendForgotPasswordOtp(@Body() body: ForgotPasswordDto) {
     return this.authService.forgotPassword(body.email);
   }
