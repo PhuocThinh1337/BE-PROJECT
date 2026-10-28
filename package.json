@@ -7,7 +7,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "seed:auth": "ts-node --project tsconfig.seed.json -r tsconfig-paths/register src/seeds/auth.seed.ts"
+    "seed:auth": "ts-node --project tsconfig.seed.json -r tsconfig-paths/register src/seeds/auth.seed.ts",
+    "seed:reference": "ts-node --project tsconfig.seed.json -r tsconfig-paths/register src/seeds/reference.seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^8.1.1",
