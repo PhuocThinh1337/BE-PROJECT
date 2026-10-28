@@ -4,6 +4,13 @@ import { mkdir, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 
 export interface EnterpriseFile { mimetype: string; originalname: string; buffer: Buffer; size: number; }
+export interface StoredEnterpriseFile {
+  fileId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  url: string;
+}
 
 const allowed: Record<string, string[]> = {
   'image/png': ['.png'],
@@ -22,13 +29,21 @@ export function enterpriseFileFilter(_request: unknown, file: EnterpriseFile, ca
   callback(null, true);
 }
 
-export async function storeEnterpriseFile(file: EnterpriseFile): Promise<string> {
+export async function storeEnterpriseFile(file: EnterpriseFile): Promise<StoredEnterpriseFile> {
   if (file.size > 5 * 1024 * 1024 || !allowed[file.mimetype]?.includes(extname(file.originalname).toLowerCase())) {
     throw new BadRequestException('The file is invalid or exceeds the 5 MB limit.');
   }
   const directory = join(process.cwd(), 'uploads', 'enterprises');
-  const filename = `${randomUUID()}${extname(file.originalname).toLowerCase()}`;
+  const fileId = randomUUID();
+  const extension = extname(file.originalname).toLowerCase();
+  const filename = `${fileId}${extension}`;
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, filename), file.buffer);
-  return `/uploads/enterprises/${filename}`;
+  return {
+    fileId,
+    fileName: file.originalname.split(/[\\/]/).pop() || filename,
+    contentType: file.mimetype,
+    size: file.size,
+    url: `/uploads/enterprises/${filename}`,
+  };
 }

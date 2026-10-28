@@ -73,6 +73,30 @@ export class Enterprise {
   @Column({ nullable: true })
   businessLicenseUrl: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  businessLicenseFileId: string | null;
+
+  @Column({ nullable: true })
+  businessLicenseFileName: string | null;
+
+  @Column({ nullable: true, length: 150 })
+  businessLicenseContentType: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  businessLicenseSize: number | null;
+
   @Column({ nullable: true })
   otherDocumentUrl: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  otherDocumentFileId: string | null;
+
+  @Column({ nullable: true })
+  otherDocumentFileName: string | null;
+
+  @Column({ nullable: true, length: 150 })
+  otherDocumentContentType: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  otherDocumentSize: number | null;
 }

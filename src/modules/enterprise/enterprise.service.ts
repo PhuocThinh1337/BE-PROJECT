@@ -10,7 +10,7 @@ import { DeleteEnterprisesDto } from './dto/delete-enterprises.dto';
 import { ListEnterprisesQueryDto } from './dto/list-enterprises-query.dto';
 import { UpdateEnterpriseDto } from './dto/update-enterprise.dto';
 import { Enterprise } from './enterprise.entity';
-import { EnterpriseFile, storeEnterpriseFile } from './enterprise-upload';
+import { EnterpriseFile, StoredEnterpriseFile, storeEnterpriseFile } from './enterprise-upload';
 import { PageResponseDto } from '../../commons/dto/page-response.dto';
 import { EnterpriseResponseDto } from './dto/enterprise-response.dto';
 import { EnterpriseDetailResponseDto } from './dto/enterprise-detail-response.dto';
@@ -51,7 +51,7 @@ export class EnterpriseService {
   async get(id: string): Promise<{ message: string; data: EnterpriseDetailResponseDto }> {
     const record = await this.enterprises.findOne({ where: { id }, relations: ['user', 'businessType', 'businessIndustry'] });
     if (!record) throw new NotFoundException('Enterprise not found.');
-    return { message: 'Enterprise details retrieved successfully', data: this.toDetailResponse(record) };
+    return { message: 'Enterprise details retrieved successfully', data: await this.toDetailResponse(record) };
   }
 
   async create(input: CreateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
@@ -70,6 +70,8 @@ export class EnterpriseService {
     } as CreateUserDto);
     const user = await this.users.findByUsername(taxCode);
     if (!user) throw new NotFoundException('Could not create enterprise account.');
+    const storedBusinessLicense = businessLicense ? await storeEnterpriseFile(businessLicense) : null;
+    const storedOtherDocument = otherDocument ? await storeEnterpriseFile(otherDocument) : null;
     const record = this.enterprises.create({
       userId: user.id, user, taxCode, name: input.name, email: input.email,
       licenseIssueDate: input.licenseIssueDate ?? null,
@@ -80,8 +82,16 @@ export class EnterpriseService {
       operatingProvince: input.operatingProvince ?? null, operatingWard: input.operatingWard ?? null,
       businessLocation: input.businessLocation ?? null, representative: input.representative ?? null,
       representativePhone: input.representativePhone ?? null,
-      businessLicenseUrl: businessLicense ? await storeEnterpriseFile(businessLicense) : null,
-      otherDocumentUrl: otherDocument ? await storeEnterpriseFile(otherDocument) : null,
+      businessLicenseUrl: storedBusinessLicense?.url ?? null,
+      businessLicenseFileId: storedBusinessLicense?.fileId ?? null,
+      businessLicenseFileName: storedBusinessLicense?.fileName ?? null,
+      businessLicenseContentType: storedBusinessLicense?.contentType ?? null,
+      businessLicenseSize: storedBusinessLicense?.size ?? null,
+      otherDocumentUrl: storedOtherDocument?.url ?? null,
+      otherDocumentFileId: storedOtherDocument?.fileId ?? null,
+      otherDocumentFileName: storedOtherDocument?.fileName ?? null,
+      otherDocumentContentType: storedOtherDocument?.contentType ?? null,
+      otherDocumentSize: storedOtherDocument?.size ?? null,
     });
     await this.enterprises.save(record);
     return { message: 'Enterprise created successfully', data: { ...created.data, enterpriseId: record.id } };
@@ -107,8 +117,8 @@ export class EnterpriseService {
       businessLocation: input.businessLocation ?? null, representative: input.representative ?? null,
       representativePhone: input.representativePhone ?? null,
     });
-    if (businessLicense) record.businessLicenseUrl = await storeEnterpriseFile(businessLicense);
-    if (otherDocument) record.otherDocumentUrl = await storeEnterpriseFile(otherDocument);
+    if (businessLicense) this.setStoredFile(record, 'businessLicense', await storeEnterpriseFile(businessLicense));
+    if (otherDocument) this.setStoredFile(record, 'otherDocument', await storeEnterpriseFile(otherDocument));
     record.user.fullname = input.name;
     record.user.email = input.email;
     await this.users.save(record.user);
@@ -131,7 +141,7 @@ export class EnterpriseService {
     };
   }
 
-  private toDetailResponse(record: Enterprise): EnterpriseDetailResponseDto {
+  private async toDetailResponse(record: Enterprise): Promise<EnterpriseDetailResponseDto> {
     return {
       name: record.name,
       taxCode: record.taxCode,
@@ -149,8 +159,69 @@ export class EnterpriseService {
       businessLocation: record.businessLocation,
       representative: record.representative,
       representativePhone: record.representativePhone,
-      businessLicense: record.businessLicenseUrl ? { url: record.businessLicenseUrl } : null,
-      otherDocument: record.otherDocumentUrl ? { url: record.otherDocumentUrl } : null,
+      businessLicense: await this.toFileResponse(record, 'businessLicense'),
+      otherDocument: await this.toFileResponse(record, 'otherDocument'),
+    };
+  }
+
+  private setStoredFile(record: Enterprise, field: 'businessLicense' | 'otherDocument', file: StoredEnterpriseFile) {
+    if (field === 'businessLicense') {
+      record.businessLicenseUrl = file.url;
+      record.businessLicenseFileId = file.fileId;
+      record.businessLicenseFileName = file.fileName;
+      record.businessLicenseContentType = file.contentType;
+      record.businessLicenseSize = file.size;
+      return;
+    }
+    record.otherDocumentUrl = file.url;
+    record.otherDocumentFileId = file.fileId;
+    record.otherDocumentFileName = file.fileName;
+    record.otherDocumentContentType = file.contentType;
+    record.otherDocumentSize = file.size;
+  }
+
+  private async toFileResponse(record: Enterprise, field: 'businessLicense' | 'otherDocument') {
+    const metadata = field === 'businessLicense'
+      ? {
+          url: record.businessLicenseUrl,
+          fileId: record.businessLicenseFileId,
+          fileName: record.businessLicenseFileName,
+          contentType: record.businessLicenseContentType,
+          size: record.businessLicenseSize,
+        }
+      : {
+          url: record.otherDocumentUrl,
+          fileId: record.otherDocumentFileId,
+          fileName: record.otherDocumentFileName,
+          contentType: record.otherDocumentContentType,
+          size: record.otherDocumentSize,
+        };
+    const url = metadata.url;
+    if (!url) return null;
+
+    const fileName = metadata.fileName || url.split('/').pop() || 'file';
+    let size = metadata.size ?? 0;
+    if (metadata.size == null) {
+      const { stat } = await import('fs/promises');
+      const { join } = await import('path');
+      try {
+        size = (await stat(join(process.cwd(), 'uploads', 'enterprises', url.split('/').pop() || ''))).size;
+      } catch {
+        size = 0;
+      }
+    }
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    const contentTypes: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', pdf: 'application/pdf',
+      doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    const fileId = metadata.fileId || (url.split('/').pop() || '').replace(/\.[^.]+$/, '');
+    return {
+      fileId,
+      fileName,
+      contentType: metadata.contentType || contentTypes[extension || ''] || 'application/octet-stream',
+      size,
+      url,
     };
   }
 }
