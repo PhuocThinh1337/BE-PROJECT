@@ -10,7 +10,7 @@ import { DeleteEnterprisesDto } from './dto/delete-enterprises.dto';
 import { ListEnterprisesQueryDto } from './dto/list-enterprises-query.dto';
 import { UpdateEnterpriseDto } from './dto/update-enterprise.dto';
 import { Enterprise } from './enterprise.entity';
-import { EnterpriseFile, StoredEnterpriseFile, storeEnterpriseFile } from './enterprise-upload';
+import { EnterpriseFile, removeEnterpriseFile, StoredEnterpriseFile, storeEnterpriseFile } from './enterprise-upload';
 import { PageResponseDto } from '../../commons/dto/page-response.dto';
 import { EnterpriseResponseDto } from './dto/enterprise-response.dto';
 import { EnterpriseDetailResponseDto } from './dto/enterprise-detail-response.dto';
@@ -117,8 +117,22 @@ export class EnterpriseService {
       businessLocation: input.businessLocation ?? null, representative: input.representative ?? null,
       representativePhone: input.representativePhone ?? null,
     });
-    if (businessLicense) this.setStoredFile(record, 'businessLicense', await storeEnterpriseFile(businessLicense));
-    if (otherDocument) this.setStoredFile(record, 'otherDocument', await storeEnterpriseFile(otherDocument));
+    if (businessLicense) {
+      const replacement = await storeEnterpriseFile(businessLicense);
+      await removeEnterpriseFile(record.businessLicenseUrl);
+      this.setStoredFile(record, 'businessLicense', replacement);
+    } else if (input.businessLicense === null) {
+      await removeEnterpriseFile(record.businessLicenseUrl);
+      this.clearStoredFile(record, 'businessLicense');
+    }
+    if (otherDocument) {
+      const replacement = await storeEnterpriseFile(otherDocument);
+      await removeEnterpriseFile(record.otherDocumentUrl);
+      this.setStoredFile(record, 'otherDocument', replacement);
+    } else if (input.otherDocument === null) {
+      await removeEnterpriseFile(record.otherDocumentUrl);
+      this.clearStoredFile(record, 'otherDocument');
+    }
     record.user.fullname = input.name;
     record.user.email = input.email;
     await this.users.save(record.user);
@@ -180,6 +194,21 @@ export class EnterpriseService {
     record.otherDocumentSize = file.size;
   }
 
+  private clearStoredFile(record: Enterprise, field: 'businessLicense' | 'otherDocument') {
+    if (field === 'businessLicense') {
+      record.businessLicenseUrl = null;
+      record.businessLicenseFileId = null;
+      record.businessLicenseFileName = null;
+      record.businessLicenseContentType = null;
+      record.businessLicenseSize = null;
+      return;
+    }
+    record.otherDocumentUrl = null;
+    record.otherDocumentFileId = null;
+    record.otherDocumentFileName = null;
+    record.otherDocumentContentType = null;
+    record.otherDocumentSize = null;
+  }
   private async toFileResponse(record: Enterprise, field: 'businessLicense' | 'otherDocument') {
     const metadata = field === 'businessLicense'
       ? {

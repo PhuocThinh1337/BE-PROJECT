@@ -1,7 +1,7 @@
 ﻿import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { basename, extname, join } from 'path';
 
 export interface EnterpriseFile { mimetype: string; originalname: string; buffer: Buffer; size: number; }
 export interface StoredEnterpriseFile {
@@ -46,4 +46,17 @@ export async function storeEnterpriseFile(file: EnterpriseFile): Promise<StoredE
     size: file.size,
     url: `/uploads/enterprises/${filename}`,
   };
+}
+export async function removeEnterpriseFile(url: string | null): Promise<void> {
+  const prefix = '/uploads/enterprises/';
+  if (!url?.startsWith(prefix)) return;
+
+  const filename = url.slice(prefix.length);
+  if (!filename || filename !== basename(filename)) return;
+
+  try {
+    await unlink(join(process.cwd(), 'uploads', 'enterprises', filename));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }

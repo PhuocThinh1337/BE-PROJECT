@@ -1,7 +1,8 @@
-﻿import { IsDateString, IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+﻿import { IsDateString, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 const emptyToNull = ({ value }: { value: unknown }) => value === '' ? null : value;
+const nullSentinel = ({ value }: { value: unknown }) => value === 'null' ? null : value;
 
 export class UpdateEnterpriseDto {
   @IsString() @IsNotEmpty() @MaxLength(200) name: string;
@@ -20,4 +21,7 @@ export class UpdateEnterpriseDto {
   @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500) businessLocation?: string | null;
   @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(150) representative?: string | null;
   @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(30) representativePhone?: string | null;
+  // Omit to keep the current file, send "null" to remove it, or upload a file to replace it.
+  @IsOptional() @Transform(nullSentinel) @IsString() @IsIn(['null']) businessLicense?: string | null;
+  @IsOptional() @Transform(nullSentinel) @IsString() @IsIn(['null']) otherDocument?: string | null;
 }

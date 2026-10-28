@@ -82,7 +82,8 @@ export class EnterpriseController {
     officePhone: { type: 'string', nullable: true }, operatingProvince: { type: 'string', nullable: true },
     operatingWard: { type: 'string', nullable: true }, businessLocation: { type: 'string', nullable: true },
     representative: { type: 'string', nullable: true }, representativePhone: { type: 'string', nullable: true },
-    businessLicense: { type: 'string', format: 'binary' }, otherDocument: { type: 'string', format: 'binary' },
+    businessLicense: { oneOf: [{ type: 'string', format: 'binary' }, { type: 'string', enum: ['null'] }] },
+    otherDocument: { oneOf: [{ type: 'string', format: 'binary' }, { type: 'string', enum: ['null'] }] },
   } } })
   @ApiOperation({ summary: 'Cập nhật doanh nghiệp và giấy tờ đính kèm' })
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }, @Req() request: any) {
