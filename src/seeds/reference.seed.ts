@@ -14,6 +14,12 @@ const businessTypesToSeed = [
   { code: 'TNHH', name: 'Công ty trách nhiệm hữu hạn' },
   { code: 'CTCP', name: 'Công ty cổ phần' },
   { code: 'CTHD', name: 'Công ty hợp danh' },
+  { code: 'HTX', name: 'Hợp tác xã' },
+  { code: 'TNHH1TV', name: 'Công ty TNHH một thành viên' },
+  { code: 'TNHH2TV', name: 'Công ty TNHH hai thành viên trở lên' },
+  { code: 'DNCVNN', name: 'Doanh nghiệp có vốn đầu tư nước ngoài' },
+  { code: 'CN', name: 'Chi nhánh doanh nghiệp' },
+  { code: 'VPDD', name: 'Văn phòng đại diện' },
 ];
 
 const businessIndustriesToSeed = [
@@ -22,8 +28,22 @@ const businessIndustriesToSeed = [
   { code: 'SX', name: 'Sản xuất', level: 4 },
   { code: 'XD', name: 'Xây dựng', level: 4 },
   { code: 'VT', name: 'Vận tải', level: 4 },
+  { code: 'NN', name: 'Nông nghiệp và lâm nghiệp', level: 4 },
+  { code: 'TP', name: 'Chế biến thực phẩm', level: 4 },
+  { code: 'DL', name: 'Du lịch và lữ hành', level: 4 },
+  { code: 'GD', name: 'Giáo dục và đào tạo', level: 4 },
+  { code: 'YT', name: 'Y tế và chăm sóc sức khỏe', level: 4 },
+  { code: 'TC', name: 'Tài chính và kế toán', level: 4 },
+  { code: 'BDS', name: 'Kinh doanh bất động sản', level: 4 },
+  { code: 'LOG', name: 'Logistics và kho vận', level: 4 },
+  { code: 'NH', name: 'Nhà hàng và dịch vụ ăn uống', level: 4 },
+  { code: 'TT', name: 'Truyền thông và quảng cáo', level: 4 },
+  { code: 'TV', name: 'Tư vấn và dịch vụ chuyên môn', level: 4 },
+  { code: 'MT', name: 'Dịch vụ môi trường', level: 4 },
+  { code: 'NL', name: 'Sản xuất và phân phối năng lượng', level: 4 },
+  { code: 'VTEL', name: 'Viễn thông', level: 4 },
+  { code: 'BL', name: 'Bán lẻ', level: 4 },
 ];
-
 async function seedReferenceData() {
   require('dotenv').config();
   const connection = await createConnection({

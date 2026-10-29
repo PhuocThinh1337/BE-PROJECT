@@ -113,7 +113,7 @@ export class UserService {
 
     const username = input.username.trim().toUpperCase();
     const validUsername = role.role === 'DOANH_NGHIEP'
-      ? /^\d{10}$/.test(username)
+      ? /^\d{10,13}$/.test(username)
       : role.role === 'SO' && /^VNA\d{8}$/.test(username);
     if (!validUsername) {
       throw new ConflictException('Tên tài khoản không đúng định dạng theo vai trò.');
@@ -187,7 +187,7 @@ export class UserService {
     const role = await this.roleRepository.findOne({ where: { id: input.roleId } });
     if (!role) throw new NotFoundException('Không tìm thấy vai trò.');
     const usernameMatchesRole = role.role === 'DOANH_NGHIEP'
-      ? /^\d{10}$/.test(user.username)
+      ? /^\d{10,13}$/.test(user.username)
       : role.role === 'SO' && /^VNA\d{8}$/.test(user.username);
     if (!usernameMatchesRole) throw new ConflictException('Định dạng tên đăng nhập không phù hợp với vai trò đã chọn.');
 

@@ -14,6 +14,7 @@ import { ConvertRoleIdsToUuid1740000000000 } from './database/migrations/1740000
 import { CreateEnterpriseTables1750000000000 } from './database/migrations/1750000000000-CreateEnterpriseTables';
 import { AlignEnterpriseContracts1760000000000 } from './database/migrations/1760000000000-AlignEnterpriseContracts';
 import { AddEnterpriseFileMetadata1770000000000 } from './database/migrations/1770000000000-AddEnterpriseFileMetadata';
+import { ExpandEnterpriseTaxCodeLength1780000000000 } from './database/migrations/1780000000000-ExpandEnterpriseTaxCodeLength';
 import { Enterprise } from './modules/enterprise/enterprise.entity';
 import { BusinessIndustry, BusinessType } from './modules/enterprise/enterprise-reference.entity';
 import { EnterpriseModule } from './modules/enterprise/enterprise.module';
@@ -39,6 +40,7 @@ import { load } from './config';
         CreateEnterpriseTables1750000000000,
         AlignEnterpriseContracts1760000000000,
         AddEnterpriseFileMetadata1770000000000,
+        ExpandEnterpriseTaxCodeLength1780000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

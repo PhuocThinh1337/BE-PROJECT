@@ -53,7 +53,7 @@ export class EnterpriseController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['taxCode', 'name', 'businessTypeId', 'businessIndustryId', 'province', 'ward', 'email'], properties: {
     name: { type: 'string' }, licenseIssueDate: { type: 'string', format: 'date', nullable: true },
-    taxCode: { type: 'string', pattern: '^\\d{10}$' },
+    taxCode: { type: 'string', pattern: '^\\d{10,13}$' },
     businessTypeId: { type: 'string', format: 'uuid' }, businessIndustryId: { type: 'string', format: 'uuid' },
     province: { type: 'string' }, ward: { type: 'string' }, address: { type: 'string', nullable: true },
     foreignName: { type: 'string', nullable: true }, email: { type: 'string', format: 'email' },

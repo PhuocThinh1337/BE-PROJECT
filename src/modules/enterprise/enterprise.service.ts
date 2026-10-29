@@ -1,4 +1,4 @@
-﻿import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Role } from '../role/role.entity';
@@ -107,6 +107,8 @@ export class EnterpriseService {
     const existingEmail = await this.users.findByEmail(input.email);
     if (existingEmail && existingEmail.id !== record.userId) throw new ConflictException('Email đã được sử dụng.');
 
+    const oldFilesToRemove: string[] = [];
+
     Object.assign(record, {
       name: input.name, email: input.email, licenseIssueDate: input.licenseIssueDate ?? null,
       businessTypeId: businessType.id, businessType,
@@ -119,24 +121,25 @@ export class EnterpriseService {
     });
     if (businessLicense) {
       const replacement = await storeEnterpriseFile(businessLicense);
-      await removeEnterpriseFile(record.businessLicenseUrl);
+      if (record.businessLicenseUrl) oldFilesToRemove.push(record.businessLicenseUrl);
       this.setStoredFile(record, 'businessLicense', replacement);
     } else if (input.businessLicense === null) {
-      await removeEnterpriseFile(record.businessLicenseUrl);
+      if (record.businessLicenseUrl) oldFilesToRemove.push(record.businessLicenseUrl);
       this.clearStoredFile(record, 'businessLicense');
     }
     if (otherDocument) {
       const replacement = await storeEnterpriseFile(otherDocument);
-      await removeEnterpriseFile(record.otherDocumentUrl);
+      if (record.otherDocumentUrl) oldFilesToRemove.push(record.otherDocumentUrl);
       this.setStoredFile(record, 'otherDocument', replacement);
     } else if (input.otherDocument === null) {
-      await removeEnterpriseFile(record.otherDocumentUrl);
+      if (record.otherDocumentUrl) oldFilesToRemove.push(record.otherDocumentUrl);
       this.clearStoredFile(record, 'otherDocument');
     }
     record.user.fullname = input.name;
     record.user.email = input.email;
     await this.users.save(record.user);
     await this.enterprises.save(record);
+    for (const oldFileUrl of oldFilesToRemove) await removeEnterpriseFile(oldFileUrl);
     return { message: 'Cập nhật doanh nghiệp thành công.', data: this.toResponse(record) };
   }
 
