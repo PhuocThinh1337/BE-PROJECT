@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+﻿import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class ConvertRoleIdsToUuid1740000000000 implements MigrationInterface {
   name = 'ConvertRoleIdsToUuid1740000000000';
@@ -43,6 +43,7 @@ export class ConvertRoleIdsToUuid1740000000000 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN "id" CASCADE`);
     await queryRunner.query(`ALTER TABLE "roles" RENAME COLUMN "id_uuid" TO "id"`);
     await queryRunner.query(`ALTER TABLE "roles" ADD CONSTRAINT "PK_roles_id" PRIMARY KEY ("id")`);
+    await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
     await queryRunner.query(`
       ALTER TABLE "users" ADD CONSTRAINT "FK_users_roleId_roles_id"
       FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION
@@ -79,6 +80,7 @@ export class ConvertRoleIdsToUuid1740000000000 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN "id"`);
     await queryRunner.query(`ALTER TABLE "roles" RENAME COLUMN "id_int" TO "id"`);
     await queryRunner.query(`ALTER TABLE "roles" ADD CONSTRAINT "PK_roles_id" PRIMARY KEY ("id")`);
+
     await queryRunner.query(`
       ALTER TABLE "users" ADD CONSTRAINT "FK_users_roleId_roles_id"
       FOREIGN KEY ("roleId") REFERENCES "roles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION

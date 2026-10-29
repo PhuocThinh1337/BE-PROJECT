@@ -1,9 +1,10 @@
-﻿import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateEnterpriseTables1750000000000 implements MigrationInterface {
   name = 'CreateEnterpriseTables1750000000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "id" SET DEFAULT gen_random_uuid()`);
     await queryRunner.query(`INSERT INTO "roles" ("role", "name") VALUES ('SO', 'SO'), ('DOANH_NGHIEP', 'Enterprise') ON CONFLICT ("role") DO NOTHING`);
     await queryRunner.query(`CREATE TABLE "business_types" (
       "id" uuid NOT NULL DEFAULT gen_random_uuid(), "code" character varying(50) NOT NULL,
