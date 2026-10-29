@@ -7,9 +7,9 @@ The project is now limited to the authentication flow and the `users`/`roles` ta
 1. Copy `.env.example` to `.env`; set the PostgreSQL credentials and a private JWT secret.
 2. Create the database named by `VNA_DB_DATABASE`.
 3. Run `npm install --legacy-peer-deps`, then `npm run start:dev`.
-4. Run `npm run seed:auth` in a second terminal.
+4. Run `npm run seed:reference`, then `npm run seed:auth` in a second terminal.
 
-The seed command is development-only and inserts demo users only when their usernames do not already exist. `so_admin` has role `SO`; `dn_demo` has role `DOANH_NGHIEP`. Both use the `AUTH_DEMO_PASSWORD` value, defaulting to `Test@123456`.
+The seed command is development-only and upserts demo users and enterprise records. SO usernames are `VNA00000001` and `VNA00000002`; enterprise usernames/tax codes are `0312345678` and `0101234567890`. All accounts use the `AUTH_DEMO_PASSWORD` value, defaulting to `Test@123456`. Legacy demo usernames `so_admin` and `dn_demo` are renamed to their compliant usernames when found. Profile and enterprise fields are populated for list/detail/filter/update testing. Use actual multipart requests to test file upload fields.
 
 ## Test
 
@@ -17,7 +17,7 @@ The seed command is development-only and inserts demo users only when their user
 
 ```json
 {
-  "username": "so_admin",
+  "username": "VNA00000001",
   "password": "Test@123456",
   "rememberMe": false
 }

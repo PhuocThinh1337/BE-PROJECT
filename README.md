@@ -7,10 +7,10 @@ NestJS authentication API using PostgreSQL and TypeORM. Next.js consumes the API
 1. Copy `.env.example` to `.env` and enter your local PostgreSQL credentials.
 2. Create the database named by `VNA_DB_DATABASE`.
 3. Run `npm install --legacy-peer-deps` and `npm run start:dev`.
-4. In a second terminal, run `npm run seed:auth`.
+4. In a second terminal, run `npm run seed:reference` and then `npm run seed:auth`.
 5. Send API requests to `http://localhost:3001/api/v1`.
 
-The seed command only runs when `NODE_ENV=development`. It creates `so_admin` with role `SO` and `dn_demo` with role `DOANH_NGHIEP`; both use `AUTH_DEMO_PASSWORD` (default `Test@123456`). Passwords are stored as Argon2 hashes.
+The demo seed only runs when `NODE_ENV=development`. It creates SO users `VNA00000001` and `VNA00000002`, plus enterprise users `0312345678` and `0101234567890`; all usernames follow the current role-specific format. Each account has populated profile data, and the two enterprise accounts have full enterprise records linked by `userId`. All demo accounts use `AUTH_DEMO_PASSWORD` (default `Test@123456`). Passwords are stored as Argon2 hashes. File metadata remains empty so uploads can be tested with real multipart files.
 
 Set `AUTH_DEMO_SO_EMAIL` and `AUTH_DEMO_DN_EMAIL` to real inboxes before running the seed. Rerunning the seed updates those demo account email addresses without changing their passwords.
 
@@ -18,7 +18,7 @@ Request body:
 
 ```json
 {
-  "username": "so_admin",
+  "username": "VNA00000001",
   "password": "Test@123456",
   "rememberMe": false
 }
