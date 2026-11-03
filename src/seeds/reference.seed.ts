@@ -60,9 +60,11 @@ async function seedReferenceData() {
   try {
     const roles = connection.getRepository(Role);
     for (const value of rolesToSeed) {
-      let role = await roles.findOne({ where: { role: value.role } });
+      let role = await roles.createQueryBuilder('role')
+        .where('UPPER(role.role) = :code', { code: value.role.toUpperCase() })
+        .getOne();
       if (!role) role = roles.create(value);
-      else role.name = value.name;
+      else Object.assign(role, { role: value.role.toUpperCase(), name: value.name });
       await roles.save(role);
     }
 

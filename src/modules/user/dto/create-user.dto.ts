@@ -8,7 +8,7 @@ const emptyToNull = ({ value }: { value: unknown }) => value === '' ? null : val
 export class CreateUserDto {
   @ApiProperty({ example: 'VNA25789644' })
   @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
-  @IsString() @IsNotEmpty() @Matches(/^(?:VNA\d{8}|\d{10})$/) @MaxLength(11)
+  @IsString() @IsNotEmpty() @Matches(/^(?:VNA\d{8}|\d{10}(?:-\d{3})?)$/) @MaxLength(14)
   username: string;
 
   @ApiProperty({ maxLength: 150 })

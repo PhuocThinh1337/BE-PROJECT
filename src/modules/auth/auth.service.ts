@@ -12,6 +12,9 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthSession } from './auth-session.entity';
 import { EmailChangeRequest } from './email-change-request.entity';
+import { EmailOtp } from './email-otp.entity';
+import { EmailOtpPurpose } from './email-otp-purpose.enum';
+import { Enterprise } from '../enterprise/enterprise.entity';
 import { PASSWORD_RESET_OTP_MAX_ATTEMPTS, PASSWORD_RESET_OTP_TTL_MINUTES } from './auth.constants';
 
 @Injectable()
@@ -25,6 +28,10 @@ export class AuthService {
     private readonly sessionRepository: Repository<AuthSession>,
     @InjectRepository(EmailChangeRequest)
     private readonly emailChangeRepository: Repository<EmailChangeRequest>,
+    @InjectRepository(EmailOtp)
+    private readonly emailOtpRepository: Repository<EmailOtp>,
+    @InjectRepository(Enterprise)
+    private readonly enterpriseRepository: Repository<Enterprise>,
   ) {}
 
   async login(user: User, rememberMe = false) {
@@ -92,6 +99,107 @@ export class AuthService {
     return { success: true, message: 'Mã OTP đã được gửi đến email hiện tại.' };
   }
 
+  async sendEmailOtp(email: string, purpose: EmailOtpPurpose, requesterId?: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (purpose === EmailOtpPurpose.FORGOT_PASSWORD) return this.forgotPassword(normalizedEmail);
+
+    let requestedByUserId: string | null = null;
+    if (purpose === EmailOtpPurpose.CHANGE_EMAIL) {
+      if (!requesterId) throw new UnauthorizedException('Vui lòng đăng nhập để đổi email tài khoản.');
+      const requester = await this.userService.findById(requesterId);
+      if (!requester) throw new UnauthorizedException('Phiên đăng nhập không hợp lệ.');
+      if (requester.email?.toLowerCase() === normalizedEmail) throw new BadRequestException('Email mới phải khác email hiện tại.');
+      requestedByUserId = requesterId;
+    }
+
+    const existingUser = await this.userService.findByEmail(normalizedEmail);
+    if (existingUser && (purpose === EmailOtpPurpose.REGISTER_ENTERPRISE || existingUser.id !== requesterId)) {
+      throw new ConflictException('Email này đã được sử dụng.');
+    }
+
+    const previous = await this.emailOtpRepository.findOne({ where: { email: normalizedEmail, purpose } });
+    if (previous && Date.now() - previous.createdAt.getTime() < 60_000) {
+      throw new HttpException('Vui lòng chờ một phút trước khi yêu cầu gửi lại mã OTP.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (previous) await this.emailOtpRepository.delete({ id: previous.id });
+
+    const otp = randomInt(100000, 1000000).toString();
+    const otpRequest = await this.emailOtpRepository.save(this.emailOtpRepository.create({
+      email: normalizedEmail,
+      purpose,
+      requestedByUserId,
+      otpHash: this.hashResetOtp(otp),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      attempts: 0,
+      verifiedAt: null,
+      consumedAt: null,
+    }));
+    try {
+      await this.mailService.sendEmailOtp(normalizedEmail, otp, purpose);
+    } catch (error) {
+      await this.emailOtpRepository.delete({ id: otpRequest.id });
+      throw error;
+    }
+    return { success: true, message: 'Mã OTP đã được gửi đến email.' };
+  }
+
+  async verifyChangeEmailOtp(userId: string, email: string, otp: string) {
+    const record = await this.verifyEmailOtp(email, EmailOtpPurpose.CHANGE_EMAIL, otp, userId);
+    record.verifiedAt = new Date();
+    record.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await this.emailOtpRepository.save(record);
+    return { success: true, message: 'Xác minh email thành công. Vui lòng cập nhật email mới.' };
+  }
+
+  async verifyEnterpriseRegistrationEmail(email: string, otp: string) {
+    const record = await this.verifyEmailOtp(email, EmailOtpPurpose.REGISTER_ENTERPRISE, otp);
+    record.verifiedAt = new Date();
+    record.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await this.emailOtpRepository.save(record);
+    return { success: true, message: 'Xác minh email đăng ký doanh nghiệp thành công.' };
+  }
+
+  async consumeEnterpriseRegistrationEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const record = await this.emailOtpRepository.findOne({ where: { email: normalizedEmail, purpose: EmailOtpPurpose.REGISTER_ENTERPRISE } });
+    if (!record || !record.verifiedAt || record.consumedAt || record.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('Email đăng ký chưa được xác minh hoặc mã OTP đã hết hạn.');
+    }
+    record.consumedAt = new Date();
+    await this.emailOtpRepository.save(record);
+  }
+
+  async changeEnterpriseEmail(requesterRole: string, targetUserId: string, newEmail: string) {
+    if (requesterRole !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được cập nhật email doanh nghiệp.');
+    const target = await this.userService.findById(targetUserId);
+    if (!target) throw new NotFoundException('Không tìm thấy tài khoản doanh nghiệp.');
+    if (target.role.role !== 'DOANH_NGHIEP') throw new BadRequestException('Chỉ hỗ trợ thay email tài khoản doanh nghiệp.');
+
+    const normalizedEmail = newEmail.trim().toLowerCase();
+    const existing = await this.userService.findByEmail(normalizedEmail);
+    if (existing && existing.id !== targetUserId) throw new ConflictException('Email này đã được sử dụng.');
+    target.email = normalizedEmail;
+    await this.userService.save(target);
+    await this.enterpriseRepository.update({ userId: targetUserId }, { email: normalizedEmail });
+    return { success: true, message: 'Cập nhật email doanh nghiệp thành công.' };
+  }
+
+  private async verifyEmailOtp(email: string, purpose: EmailOtpPurpose, otp: string, requesterId?: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const record = await this.emailOtpRepository.findOne({ where: { email: normalizedEmail, purpose } });
+    if (!record || record.expiresAt.getTime() <= Date.now() || record.consumedAt ||
+      (purpose === EmailOtpPurpose.CHANGE_EMAIL && record.requestedByUserId !== requesterId)) {
+      throw new BadRequestException('Mã OTP không hợp lệ hoặc đã hết hạn.');
+    }
+    if (record.attempts >= 5) throw new BadRequestException('Bạn đã nhập sai quá số lần cho phép. Vui lòng yêu cầu mã OTP mới.');
+    if (!this.hashMatchesOtp(otp, record.otpHash)) {
+      record.attempts += 1;
+      await this.emailOtpRepository.save(record);
+      throw new BadRequestException('Mã OTP không hợp lệ hoặc đã hết hạn.');
+    }
+    return record;
+  }
+
   async verifyEmailChange(userId: string, otp: string) {
     const request = await this.emailChangeRepository.findOne({ where: { userId } });
     if (!request || request.expiresAt.getTime() <= Date.now()) {
@@ -115,25 +223,22 @@ export class AuthService {
 
   async completeEmailChange(userId: string, newEmail: string) {
     const normalizedEmail = newEmail.trim().toLowerCase();
-    const request = await this.emailChangeRepository.findOne({ where: { userId } });
-    if (!request || !request.verifiedAt || request.expiresAt.getTime() <= Date.now()) {
-      if (request) await this.emailChangeRepository.delete({ id: request.id });
+    const request = await this.emailOtpRepository.findOne({
+      where: { email: normalizedEmail, purpose: EmailOtpPurpose.CHANGE_EMAIL, requestedByUserId: userId },
+    });
+    if (!request || !request.verifiedAt || request.consumedAt || request.expiresAt.getTime() <= Date.now()) {
+      if (request && request.expiresAt.getTime() <= Date.now()) await this.emailOtpRepository.delete({ id: request.id });
       throw new BadRequestException('Hãy xác minh mã OTP trước khi đổi email hoặc yêu cầu mã mới.');
-    }
-    if (request.newEmail === normalizedEmail) {
-      throw new BadRequestException('Email mới phải khác email hiện tại.');
     }
     const existingUser = await this.userService.findByEmail(normalizedEmail);
     if (existingUser && existingUser.id !== userId) throw new ConflictException('Email này đã được sử dụng.');
     const user = await this.userService.findById(userId);
     if (!user) throw new UnauthorizedException('Phiên đăng nhập không hợp lệ.');
-    if (user.email?.toLowerCase() !== request.newEmail) {
-      await this.emailChangeRepository.delete({ id: request.id });
-      throw new BadRequestException('Email tài khoản đã thay đổi. Vui lòng yêu cầu mã OTP mới.');
-    }
     user.email = normalizedEmail;
     await this.userService.save(user);
-    await this.emailChangeRepository.delete({ id: request.id });
+    await this.enterpriseRepository.update({ userId }, { email: normalizedEmail });
+    request.consumedAt = new Date();
+    await this.emailOtpRepository.save(request);
     return { success: true, message: 'Cập nhật email thành công.' };
   }
 

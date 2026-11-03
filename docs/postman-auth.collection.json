@@ -56,7 +56,7 @@
     },
     {
       "name": "Forgot password - registered email sends OTP (SMTP required)",
-      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\"\n}" }, "url": "{{baseUrl}}/auth/forgot-password" },
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"purpose\": \"FORGOT_PASSWORD\"\n}" }, "url": "{{baseUrl}}/auth/email-otp" },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Forgot password returns 200, or 503 when SMTP is unavailable', () => pm.expect([200, 503]).to.include(pm.response.code));"] } }]
     },
     {
@@ -71,12 +71,12 @@
     },
     {
       "name": "Change email - request OTP to current email",
-      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": "{{baseUrl}}/auth/change-email/request-otp" },
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{newEmail}}\",\n  \"purpose\": \"CHANGE_EMAIL\"\n}" }, "url": "{{baseUrl}}/auth/email-otp" },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Email OTP request succeeds', () => pm.response.to.have.status(201));"] } }]
     },
     {
       "name": "Change email - verify OTP",
-      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"otpCode\": \"{{emailChangeOtp}}\"\n}" }, "url": "{{baseUrl}}/auth/change-email/verify-otp" },
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{newEmail}}\",\n  \"otpCode\": \"{{emailChangeOtp}}\"\n}" }, "url": "{{baseUrl}}/auth/change-email/verify-otp" },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Email OTP verification succeeds', () => pm.response.to.have.status(201));"] } }]
     },
     {

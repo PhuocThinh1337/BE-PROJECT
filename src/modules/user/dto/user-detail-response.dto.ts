@@ -9,6 +9,7 @@ export class UserDetailResponseDto {
   @ApiPropertyOptional({ enum: Gender, nullable: true }) gender: Gender | null;
   @ApiProperty({ nullable: true }) position: string | null;
   @ApiProperty({ description: 'Mã vai trò dưới dạng chuỗi theo hợp đồng API với FE' }) roleId: string;
+  @ApiProperty({ example: 'SO', description: 'Mã vai trò viết hoa' }) roleCode: string;
   @ApiProperty() email: string;
   @ApiProperty({ nullable: true }) province: string | null;
   @ApiProperty({ nullable: true }) ward: string | null;

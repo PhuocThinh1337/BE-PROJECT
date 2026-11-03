@@ -1,4 +1,4 @@
-﻿import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,13 +10,13 @@ import { EnterpriseFile, enterpriseFileFilter } from './enterprise-upload';
 import { EnterpriseService } from './enterprise.service';
 
 @ApiTags('Doanh nghiệp')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('enterprises')
 export class EnterpriseController {
   constructor(private readonly service: EnterpriseService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiQuery({ name: 'name', required: false })
   @ApiQuery({ name: 'taxCode', required: false })
   @ApiQuery({ name: 'businessType', required: false })
@@ -32,6 +32,8 @@ export class EnterpriseController {
   }
 
   @Delete()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Xóa một hoặc nhiều doanh nghiệp và tài khoản liên quan' })
   deleteMany(@Body() body: DeleteEnterprisesDto, @Req() request: any) {
     this.assertSo(request.user.role);
@@ -39,6 +41,8 @@ export class EnterpriseController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lấy thông tin chi tiết doanh nghiệp' })
   get(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     this.assertSo(request.user.role);
@@ -53,7 +57,7 @@ export class EnterpriseController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['taxCode', 'name', 'businessTypeId', 'businessIndustryId', 'province', 'ward', 'email'], properties: {
     name: { type: 'string' }, licenseIssueDate: { type: 'string', format: 'date', nullable: true },
-    taxCode: { type: 'string', pattern: '^\\d{10,13}$' },
+    taxCode: { type: 'string', pattern: '^\\d{10}(-\\d{3})?$' },
     businessTypeId: { type: 'string', format: 'uuid' }, businessIndustryId: { type: 'string', format: 'uuid' },
     province: { type: 'string' }, ward: { type: 'string' }, address: { type: 'string', nullable: true },
     foreignName: { type: 'string', nullable: true }, email: { type: 'string', format: 'email' },
@@ -62,13 +66,14 @@ export class EnterpriseController {
     representative: { type: 'string', nullable: true }, representativePhone: { type: 'string', nullable: true },
     businessLicense: { type: 'string', format: 'binary' }, otherDocument: { type: 'string', format: 'binary' },
   } } })
-  @ApiOperation({ summary: 'Tạo doanh nghiệp và tài khoản đăng nhập bằng mã số thuế' })
-  create(@Body() body: CreateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }, @Req() request: any) {
-    this.assertSo(request.user.role);
+  @ApiOperation({ summary: 'Đăng ký doanh nghiệp sau khi xác minh email' })
+  create(@Body() body: CreateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }) {
     return this.service.create(body, files?.businessLicense?.[0], files?.otherDocument?.[0]);
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'businessLicense', maxCount: 1 },
     { name: 'otherDocument', maxCount: 1 },

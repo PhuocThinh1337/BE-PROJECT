@@ -52,9 +52,11 @@ async function seedAuthUsers() {
     const roles = connection.getRepository(Role);
     const roleByCode = new Map<string, Role>();
     for (const fixture of roleFixtures) {
-      let role = await roles.findOne({ where: { role: fixture.role } });
+      let role = await roles.createQueryBuilder('role')
+        .where('UPPER(role.role) = :code', { code: fixture.role.toUpperCase() })
+        .getOne();
       if (!role) role = roles.create(fixture);
-      else role.name = fixture.name;
+      else Object.assign(role, { role: fixture.role.toUpperCase(), name: fixture.name });
       roleByCode.set(fixture.role, await roles.save(role));
     }
 
@@ -91,7 +93,7 @@ async function seedAuthUsers() {
         ward: 'Phường Bến Nghé', address: '100 Nguyễn Huệ',
       },
       {
-        username: '0101234567890', roleCode: 'DOANH_NGHIEP', fullname: 'Công ty Cổ phần VNA Sample',
+        username: '0101234567-890', roleCode: 'DOANH_NGHIEP', fullname: 'Công ty Cổ phần VNA Sample',
         email: 'enterprise.sample@example.com', birthDate: null, gender: null, position: null,
         province: 'Thành phố Hà Nội', ward: 'Phường Tràng Tiền', address: '25 Tràng Tiền',
       },
@@ -126,7 +128,7 @@ async function seedAuthUsers() {
         businessLocation: '100 Nguyễn Huệ', representative: 'Trần Minh Khang', representativePhone: '0901234567',
       },
       {
-        username: '0101234567890', taxCode: '0101234567890', name: 'Công ty Cổ phần VNA Sample',
+        username: '0101234567-890', taxCode: '0101234567-890', name: 'Công ty Cổ phần VNA Sample',
         email: 'enterprise.sample@example.com', businessTypeCode: 'CTCP', businessIndustryCode: 'TM-DV',
         licenseIssueDate: '2023-03-01', province: 'Thành phố Hà Nội', ward: 'Phường Tràng Tiền',
         address: '25 Tràng Tiền', foreignName: 'VNA Sample Joint Stock Company', officePhone: '02412345678',
@@ -155,7 +157,7 @@ async function seedAuthUsers() {
       await enterprises.save(enterprise);
     }
 
-    console.log('Demo users and enterprises are ready: VNA00000001, VNA00000002, 0312345678, 0101234567890.');
+    console.log('Demo users and enterprises are ready: VNA00000001, VNA00000002, 0312345678, 0101234567-890.');
     console.log('All demo accounts use AUTH_DEMO_PASSWORD (default Test@123456).');
     console.log('File fields are left empty; test uploads with multipart/form-data.');
   } finally {

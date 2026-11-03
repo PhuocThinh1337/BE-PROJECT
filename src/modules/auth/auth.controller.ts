@@ -1,15 +1,17 @@
-﻿import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ChangeEmailDto, VerifyChangeEmailOtpDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { EmailOtpRequestDto, VerifyEmailOtpDto } from './dto/email-otp.dto';
 import { InitializePasswordDto } from './dto/initialize-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthService } from './auth.service';
+import { EmailOtpPurpose } from './email-otp-purpose.enum';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LocalAuthGuard } from './local-auth.guard';
+import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
 
 @ApiTags('Xác thực')
 @Controller('auth')
@@ -52,18 +54,28 @@ export class AuthController {
     return this.authService.initializePassword(request.user.id, body.password);
   }
 
-  @Post('change-email/request-otp')
+  @Post(':userId/initialize-password')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  requestEmailChange(@Req() request: any) {
-    return this.authService.requestEmailChange(request.user.id);
+  @ApiOperation({ summary: 'Sở khởi tạo mật khẩu cho tài khoản người dùng hoặc doanh nghiệp' })
+  initializePasswordForUser(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: InitializePasswordDto) {
+    if (request.user.role !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được khởi tạo mật khẩu cho tài khoản khác.');
+    return this.authService.initializePassword(userId, body.password);
+  }
+
+  @Post('email-otp')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Gửi hoặc gửi lại OTP theo mục đích' })
+  sendEmailOtp(@Req() request: any, @Body() body: EmailOtpRequestDto) {
+    return this.authService.sendEmailOtp(body.email, body.purpose as EmailOtpPurpose, request.user?.id);
   }
 
   @Post('change-email/verify-otp')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   verifyChangeEmailOtp(@Req() request: any, @Body() body: VerifyChangeEmailOtpDto) {
-    return this.authService.verifyEmailChange(request.user.id, body.otpCode);
+    return this.authService.verifyChangeEmailOtp(request.user.id, body.email, body.otpCode);
   }
 
   @Patch('change-email')
@@ -73,14 +85,19 @@ export class AuthController {
     return this.authService.completeEmailChange(request.user.id, body.newEmail);
   }
 
-  @Post('forgot-password')
-  forgotPassword(@Body() body: ForgotPasswordDto) { return this.authService.forgotPassword(body.email); }
+  @Patch('change-email/:userId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sở cập nhật email tài khoản doanh nghiệp không cần OTP' })
+  changeEnterpriseEmail(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: ChangeEmailDto) {
+    return this.authService.changeEnterpriseEmail(request.user.role, userId, body.newEmail);
+  }
 
-  @Post('resend-forgot-password-otp')
+  @Post('register-enterprise/verify-email-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Gửi lại mã OTP khôi phục mật khẩu' })
-  resendForgotPasswordOtp(@Body() body: ForgotPasswordDto) {
-    return this.authService.forgotPassword(body.email);
+  @ApiOperation({ summary: 'Xác minh email đăng ký doanh nghiệp bằng OTP' })
+  verifyEnterpriseRegistrationEmail(@Body() body: VerifyEmailOtpDto) {
+    return this.authService.verifyEnterpriseRegistrationEmail(body.email, body.otpCode);
   }
 
   @Post('reset-password')

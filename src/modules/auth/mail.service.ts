@@ -1,6 +1,7 @@
 ﻿import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { EmailOtpPurpose } from './email-otp-purpose.enum';
 
 @Injectable()
 export class MailService {
@@ -40,6 +41,23 @@ export class MailService {
       from, to: email, subject: 'Mã OTP xác minh thay đổi email - VNA GROUP',
       text: `Mã OTP xác minh thay đổi email của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
       html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px 36px;color:#222;border:1px solid #eee;border-radius:12px"><div style="text-align:center;margin-bottom:28px"><div style="font-size:34px;font-weight:700;color:#c5a334">AV</div><div style="font-weight:700;margin-top:4px">VNA GROUP</div></div><h2 style="font-size:20px">Xin chào,</h2><p>Bạn đã yêu cầu xác minh địa chỉ email mới cho tài khoản VNA GROUP.</p><p>Mã OTP của bạn:</p><div style="background:#f5f5f7;padding:18px;text-align:center;border-radius:8px;font-size:26px;font-weight:700;letter-spacing:8px">${otp}</div><p>Mã OTP có hiệu lực trong <strong>5 phút</strong>.</p><p style="font-size:13px;color:#666">Không chia sẻ mã này với bất kỳ ai. Nếu bạn không yêu cầu thay đổi email, vui lòng bỏ qua email này.</p></div>`,
+    });
+  }
+
+  async sendEmailOtp(email: string, otp: string, purpose: EmailOtpPurpose) {
+    const labels: Record<EmailOtpPurpose, string> = {
+      [EmailOtpPurpose.CHANGE_EMAIL]: 'xác minh email mới',
+      [EmailOtpPurpose.REGISTER_ENTERPRISE]: 'đăng ký tài khoản doanh nghiệp',
+      [EmailOtpPurpose.FORGOT_PASSWORD]: 'khôi phục mật khẩu',
+    };
+    const purposeLabel = labels[purpose];
+    const { from, transporter } = this.createTransporter();
+    await transporter.sendMail({
+      from,
+      to: email,
+      subject: `Mã OTP ${purposeLabel} - VNA GROUP`,
+      text: `Mã OTP ${purposeLabel} của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:32px 36px;color:#222;border:1px solid #eee;border-radius:12px"><div style="text-align:center;margin-bottom:28px"><div style="font-size:34px;font-weight:700;color:#c5a334">AV</div><div style="font-weight:700;margin-top:4px">VNA GROUP</div></div><h2 style="font-size:20px">Xác minh email</h2><p>Bạn đã yêu cầu mã OTP để ${purposeLabel}.</p><div style="background:#f5f5f7;padding:18px;text-align:center;border-radius:8px;font-size:26px;font-weight:700;letter-spacing:8px">${otp}</div><p>Mã OTP có hiệu lực trong <strong>5 phút</strong>.</p><p style="font-size:13px;color:#666">Không chia sẻ mã này với bất kỳ ai.</p></div>`,
     });
   }
 

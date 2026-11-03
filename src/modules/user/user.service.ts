@@ -84,6 +84,7 @@ export class UserService {
         username: user.username,
         email: user.email || '',
         roleName: user.role.name,
+        roleCode: user.role.role.toUpperCase(),
         position: user.position || '',
         isActive: user.isActive,
       })),
@@ -113,7 +114,7 @@ export class UserService {
 
     const username = input.username.trim().toUpperCase();
     const validUsername = role.role === 'DOANH_NGHIEP'
-      ? /^\d{10,13}$/.test(username)
+      ? /^\d{10}(?:-\d{3})?$/.test(username)
       : role.role === 'SO' && /^VNA\d{8}$/.test(username);
     if (!validUsername) {
       throw new ConflictException('Tên tài khoản không đúng định dạng theo vai trò.');
@@ -187,7 +188,7 @@ export class UserService {
     const role = await this.roleRepository.findOne({ where: { id: input.roleId } });
     if (!role) throw new NotFoundException('Không tìm thấy vai trò.');
     const usernameMatchesRole = role.role === 'DOANH_NGHIEP'
-      ? /^\d{10,13}$/.test(user.username)
+      ? /^\d{10}(?:-\d{3})?$/.test(user.username)
       : role.role === 'SO' && /^VNA\d{8}$/.test(user.username);
     if (!usernameMatchesRole) throw new ConflictException('Định dạng tên đăng nhập không phù hợp với vai trò đã chọn.');
 
@@ -246,6 +247,7 @@ export class UserService {
       gender: user.gender || null,
       position: user.position || null,
       roleId: user.role.id,
+      roleCode: user.role.role.toUpperCase(),
       email: user.email || '',
       province: user.province || null,
       ward: user.ward || null,

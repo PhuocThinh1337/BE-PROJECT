@@ -1,13 +1,10 @@
-﻿import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
 import { BusinessIndustry, BusinessType } from './enterprise-reference.entity';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Dữ liệu tham chiếu doanh nghiệp')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller()
 export class EnterpriseReferenceController {
   constructor(

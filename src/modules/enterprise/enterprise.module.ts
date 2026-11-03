@@ -11,11 +11,13 @@ import { Enterprise } from './enterprise.entity';
 import { BusinessIndustry, BusinessType } from './enterprise-reference.entity';
 import { EnterpriseService } from './enterprise.service';
 import { EnterpriseReferenceController } from './enterprise-reference.controller';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Enterprise, BusinessType, BusinessIndustry, Role, AuthSession]),
     UserModule,
+    AuthModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

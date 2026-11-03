@@ -14,6 +14,7 @@ import { EnterpriseFile, removeEnterpriseFile, StoredEnterpriseFile, storeEnterp
 import { PageResponseDto } from '../../commons/dto/page-response.dto';
 import { EnterpriseResponseDto } from './dto/enterprise-response.dto';
 import { EnterpriseDetailResponseDto } from './dto/enterprise-detail-response.dto';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class EnterpriseService {
@@ -23,6 +24,7 @@ export class EnterpriseService {
     @InjectRepository(BusinessType) private readonly businessTypes: Repository<BusinessType>,
     @InjectRepository(BusinessIndustry) private readonly industries: Repository<BusinessIndustry>,
     private readonly users: UserService,
+    private readonly authService: AuthService,
   ) {}
 
   async list(query: ListEnterprisesQueryDto): Promise<PageResponseDto<EnterpriseResponseDto>> {
@@ -63,6 +65,10 @@ export class EnterpriseService {
     if (!businessType) throw new NotFoundException('Không tìm thấy loại hình kinh doanh đang hoạt động.');
     const businessIndustry = await this.industries.findOne({ where: { id: input.businessIndustryId, level: 4 } });
     if (!businessIndustry) throw new NotFoundException('Không tìm thấy ngành nghề kinh doanh cấp 4.');
+
+    const existingEmail = await this.users.findByEmail(input.email);
+    if (existingEmail) throw new ConflictException('Email đã được sử dụng.');
+    await this.authService.consumeEnterpriseRegistrationEmail(input.email);
 
     const created = await this.users.createUser({
       username: taxCode, fullname: input.name, password: '12345678', roleId: role.id,

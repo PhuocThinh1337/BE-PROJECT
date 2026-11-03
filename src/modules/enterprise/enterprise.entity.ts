@@ -14,7 +14,7 @@ export class Enterprise {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ unique: true, length: 13 })
+  @Column({ unique: true, length: 14 })
   taxCode: string;
 
   @Column({ length: 200 })
