@@ -40,13 +40,14 @@ Swagger docs: `http://localhost:3001/api/v1/api-docs`.
 - `PATCH /auth/change-email/:userId`: lets an SO account change a DOANH_NGHIEP account email without OTP.
 - `POST /auth/:userId/initialize-password`: lets an SO account set the target user's password; only that user's sessions are revoked.
 - `POST /auth/register-enterprise/verify-email-otp`: verifies `{ "email": "...", "otpCode": "123456" }` before public enterprise registration.
-- `POST /enterprises`, `GET /business-types`, and `GET /business-industries` are public for enterprise signup. Enterprise registration requires a verified email OTP.
+- `POST /enterprises` can be used publicly after email OTP verification, or by a logged-in SO account without OTP. `GET /business-types` and `GET /business-industries` are public for enterprise signup.
+- `GET /enterprises/me` and `PUT /enterprises/me` return/update the logged-in `DOANH_NGHIEP` account's enterprise record.
 
 Refresh tokens are stored only as hashes in the `auth_sessions` table. Access tokens expire after 15 minutes. Logout and password changes revoke the corresponding database sessions, so protected requests reject those tokens immediately.
 
 The application validates DTOs globally and rejects unknown request fields. Swagger includes request schema examples.
 
-For development, `VNA_DB_SYNCHRONIZE=true` creates/updates tables automatically. For a database managed by migrations, set `VNA_DB_SYNCHRONIZE=false` and `VNA_DB_MIGRATIONS_RUN=true`; the auth session migration creates `auth_sessions`.
+For local development, the example env uses `VNA_DB_SYNCHRONIZE=true` to create/update tables. Point it at a new or empty development database. If TypeORM reports `column "taxCode" ... contains null values`, the database already has enterprise rows from an older schema; create a separate empty database and update `VNA_DB_DATABASE` to use it, so existing data is preserved. For a database managed by migrations, set `VNA_DB_SYNCHRONIZE=false` and `VNA_DB_MIGRATIONS_RUN=true`.
 
 ## Password reset email
 

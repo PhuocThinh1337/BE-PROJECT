@@ -17,6 +17,7 @@ import { AlignEnterpriseContracts1760000000000 } from './database/migrations/176
 import { AddEnterpriseFileMetadata1770000000000 } from './database/migrations/1770000000000-AddEnterpriseFileMetadata';
 import { ExpandEnterpriseTaxCodeLength1780000000000 } from './database/migrations/1780000000000-ExpandEnterpriseTaxCodeLength';
 import { AddEmailOtpsAndVietnamTaxCodeFormat1790000000000 } from './database/migrations/1790000000000-AddEmailOtpsAndVietnamTaxCodeFormat';
+import { BackfillEnterpriseTaxCodes1800000000000 } from './database/migrations/1800000000000-BackfillEnterpriseTaxCodes';
 import { Enterprise } from './modules/enterprise/enterprise.entity';
 import { BusinessIndustry, BusinessType } from './modules/enterprise/enterprise-reference.entity';
 import { EnterpriseModule } from './modules/enterprise/enterprise.module';
@@ -44,6 +45,7 @@ import { load } from './config';
         AddEnterpriseFileMetadata1770000000000,
         ExpandEnterpriseTaxCodeLength1780000000000,
         AddEmailOtpsAndVietnamTaxCodeFormat1790000000000,
+        BackfillEnterpriseTaxCodes1800000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

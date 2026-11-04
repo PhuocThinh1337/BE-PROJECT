@@ -2,10 +2,12 @@ import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { CreateEnterpriseDto } from './dto/create-enterprise.dto';
 import { DeleteEnterprisesDto } from './dto/delete-enterprises.dto';
 import { ListEnterprisesQueryDto } from './dto/list-enterprises-query.dto';
 import { UpdateEnterpriseDto } from './dto/update-enterprise.dto';
+import { UpdateEnterpriseMeDto } from './dto/update-enterprise-me.dto';
 import { EnterpriseFile, enterpriseFileFilter } from './enterprise-upload';
 import { EnterpriseService } from './enterprise.service';
 
@@ -13,6 +15,40 @@ import { EnterpriseService } from './enterprise.service';
 @Controller('enterprises')
 export class EnterpriseController {
   constructor(private readonly service: EnterpriseService) {}
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy thông tin doanh nghiệp của tài khoản đang đăng nhập' })
+  getMe(@Req() request: any) {
+    this.assertEnterprise(request.user.role);
+    return this.service.getByUserId(request.user.id);
+  }
+
+  @Put('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'businessLicense', maxCount: 1 },
+    { name: 'otherDocument', maxCount: 1 },
+  ], { limits: { fileSize: 5 * 1024 * 1024, files: 2 }, fileFilter: enterpriseFileFilter as any }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Cập nhật thông tin doanh nghiệp của tài khoản đang đăng nhập' })
+  @ApiBody({ schema: { type: 'object', required: ['name', 'businessTypeId', 'businessIndustryId', 'province', 'ward'], properties: {
+    name: { type: 'string' }, licenseIssueDate: { type: 'string', format: 'date', nullable: true },
+    businessTypeId: { type: 'string', format: 'uuid' }, businessIndustryId: { type: 'string', format: 'uuid' },
+    province: { type: 'string' }, ward: { type: 'string' }, address: { type: 'string', nullable: true },
+    foreignName: { type: 'string', nullable: true }, officePhone: { type: 'string', nullable: true },
+    operatingProvince: { type: 'string', nullable: true }, operatingWard: { type: 'string', nullable: true },
+    businessLocation: { type: 'string', nullable: true }, representative: { type: 'string', nullable: true },
+    representativePhone: { type: 'string', nullable: true },
+    businessLicense: { oneOf: [{ type: 'string', format: 'binary' }, { type: 'string', enum: ['null'] }] },
+    otherDocument: { oneOf: [{ type: 'string', format: 'binary' }, { type: 'string', enum: ['null'] }] },
+  } } })
+  updateMe(@Req() request: any, @Body() body: UpdateEnterpriseMeDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }) {
+    this.assertEnterprise(request.user.role);
+    return this.service.updateByUserId(request.user.id, body, files?.businessLicense?.[0], files?.otherDocument?.[0]);
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -50,6 +86,7 @@ export class EnterpriseController {
   }
 
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
   @UseInterceptors(FileFieldsInterceptor([
     { name: 'businessLicense', maxCount: 1 },
     { name: 'otherDocument', maxCount: 1 },
@@ -67,8 +104,10 @@ export class EnterpriseController {
     businessLicense: { type: 'string', format: 'binary' }, otherDocument: { type: 'string', format: 'binary' },
   } } })
   @ApiOperation({ summary: 'Đăng ký doanh nghiệp sau khi xác minh email' })
-  create(@Body() body: CreateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }) {
-    return this.service.create(body, files?.businessLicense?.[0], files?.otherDocument?.[0]);
+  create(@Body() body: CreateEnterpriseDto, @UploadedFiles() files: { businessLicense?: EnterpriseFile[]; otherDocument?: EnterpriseFile[] }, @Req() request: any) {
+    const requesterRole = request.user?.role;
+    if (requesterRole && requesterRole !== 'SO') this.assertSo(requesterRole);
+    return this.service.create(body, files?.businessLicense?.[0], files?.otherDocument?.[0], requesterRole === 'SO');
   }
 
   @Put(':id')
@@ -98,5 +137,9 @@ export class EnterpriseController {
 
   private assertSo(role: string) {
     if (role !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được quản lý doanh nghiệp.');
+  }
+
+  private assertEnterprise(role: string) {
+    if (role !== 'DOANH_NGHIEP') throw new ForbiddenException('Chỉ tài khoản doanh nghiệp mới được truy cập thông tin doanh nghiệp của mình.');
   }
 }

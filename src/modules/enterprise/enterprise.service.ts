@@ -50,13 +50,19 @@ export class EnterpriseService {
     };
   }
 
+  async getByUserId(userId: string): Promise<{ message: string; data: EnterpriseDetailResponseDto }> {
+    const record = await this.enterprises.findOne({ where: { userId }, relations: ['user', 'businessType', 'businessIndustry'] });
+    if (!record) throw new NotFoundException('Không tìm thấy thông tin doanh nghiệp của tài khoản này.');
+    return { message: 'Lấy thông tin doanh nghiệp của tài khoản thành công.', data: await this.toDetailResponse(record) };
+  }
+
   async get(id: string): Promise<{ message: string; data: EnterpriseDetailResponseDto }> {
     const record = await this.enterprises.findOne({ where: { id }, relations: ['user', 'businessType', 'businessIndustry'] });
     if (!record) throw new NotFoundException('Không tìm thấy doanh nghiệp.');
     return { message: 'Lấy thông tin chi tiết doanh nghiệp thành công.', data: await this.toDetailResponse(record) };
   }
 
-  async create(input: CreateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
+  async create(input: CreateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile, skipEmailOtp = false) {
     const taxCode = input.taxCode.trim();
     if (await this.enterprises.findOne({ where: { taxCode } })) throw new ConflictException('Mã số thuế đã được đăng ký.');
     const role = await this.roles.findOne({ where: { role: 'DOANH_NGHIEP' } });
@@ -68,7 +74,7 @@ export class EnterpriseService {
 
     const existingEmail = await this.users.findByEmail(input.email);
     if (existingEmail) throw new ConflictException('Email đã được sử dụng.');
-    await this.authService.consumeEnterpriseRegistrationEmail(input.email);
+    if (!skipEmailOtp) await this.authService.consumeEnterpriseRegistrationEmail(input.email);
 
     const created = await this.users.createUser({
       username: taxCode, fullname: input.name, password: '12345678', roleId: role.id,
@@ -101,6 +107,12 @@ export class EnterpriseService {
     });
     await this.enterprises.save(record);
     return { message: 'Tạo doanh nghiệp thành công.', data: { ...created.data, enterpriseId: record.id } };
+  }
+
+  async updateByUserId(userId: string, input: Omit<UpdateEnterpriseDto, 'email'>, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
+    const record = await this.enterprises.findOne({ where: { userId } });
+    if (!record) throw new NotFoundException('Không tìm thấy thông tin doanh nghiệp của tài khoản này.');
+    return this.update(record.id, { ...input, email: record.email } as UpdateEnterpriseDto, businessLicense, otherDocument);
   }
 
   async update(id: string, input: UpdateEnterpriseDto, businessLicense?: EnterpriseFile, otherDocument?: EnterpriseFile) {
