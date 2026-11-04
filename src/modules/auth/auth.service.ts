@@ -112,8 +112,10 @@ export class AuthService {
       requestedByUserId = requesterId;
     }
 
-    const existingUser = await this.userService.findByEmail(normalizedEmail);
-    if (existingUser && (purpose === EmailOtpPurpose.REGISTER_ENTERPRISE || existingUser.id !== requesterId)) {
+    const existingUser = purpose === EmailOtpPurpose.REGISTER_ENTERPRISE
+      ? await this.userService.findByEmail(normalizedEmail)
+      : null;
+    if (existingUser) {
       throw new ConflictException('Email này đã được sử dụng.');
     }
 

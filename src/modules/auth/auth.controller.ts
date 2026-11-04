@@ -66,7 +66,7 @@ export class AuthController {
   @Post('email-otp')
   @HttpCode(HttpStatus.OK)
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Gửi hoặc gửi lại OTP theo mục đích' })
+  @ApiOperation({ summary: 'Gửi OTP; purpose CHANGE_EMAIL yêu cầu Bearer token, các mục đích khác không yêu cầu đăng nhập' })
   sendEmailOtp(@Req() request: any, @Body() body: EmailOtpRequestDto) {
     return this.authService.sendEmailOtp(body.email, body.purpose as EmailOtpPurpose, request.user?.id);
   }
