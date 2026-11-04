@@ -106,7 +106,7 @@ export class AuthService {
     let requestedByUserId: string | null = null;
     if (purpose === EmailOtpPurpose.CHANGE_EMAIL) {
       if (!requesterId) throw new UnauthorizedException('Vui lòng đăng nhập để đổi email tài khoản.');
-      const target = await this.resolveEmailChangeTarget(requesterId, requesterRole, targetUserId);
+      const target = await this.resolveEmailChangeTarget(requesterId, requesterRole, targetUserId, normalizedEmail);
       if (!target.email || target.email.toLowerCase() !== normalizedEmail) {
         throw new BadRequestException('Email gửi OTP phải là email hiện tại của tài khoản cần đổi.');
       }
@@ -147,7 +147,7 @@ export class AuthService {
   }
 
   async verifyChangeEmailOtp(userId: string, email: string, otp: string, requesterRole?: string, targetUserId?: string) {
-    const target = await this.resolveEmailChangeTarget(userId, requesterRole, targetUserId);
+    const target = await this.resolveEmailChangeTarget(userId, requesterRole, targetUserId, email.trim().toLowerCase());
     const record = await this.verifyEmailOtp(email, EmailOtpPurpose.CHANGE_EMAIL, otp, target.id);
     record.verifiedAt = new Date();
     record.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -182,12 +182,9 @@ export class AuthService {
     const normalizedEmail = newEmail.trim().toLowerCase();
     const existing = await this.userService.findByEmail(normalizedEmail);
     if (existing && existing.id !== targetUserId) throw new ConflictException('Email này đã được sử dụng.');
-    let otpRecord: EmailOtp;
-    if (target.role.role === 'SO') {
-      otpRecord = await this.findVerifiedEmailChangeOtp(targetUserId);
-      if (!otpRecord) {
-        throw new BadRequestException('Tài khoản SO cần xác minh OTP cho email mới trước khi cập nhật.');
-      }
+    const otpRecord = await this.findVerifiedEmailChangeOtp(targetUserId);
+    if (!otpRecord) {
+      throw new BadRequestException('Tài khoản cần xác minh OTP trước khi cập nhật email.');
     }
     target.email = normalizedEmail;
     await this.userService.save(target);
@@ -214,15 +211,25 @@ export class AuthService {
     return record && record.expiresAt.getTime() > Date.now() ? record : undefined;
   }
 
-  private async resolveEmailChangeTarget(requesterId: string, requesterRole?: string, targetUserId?: string) {
-    const resolvedUserId = targetUserId || requesterId;
+  private async resolveEmailChangeTarget(requesterId: string, requesterRole?: string, targetUserId?: string, email?: string) {
+    let resolvedUserId = targetUserId || requesterId;
+    if (!targetUserId && requesterRole === 'SO' && email) {
+      const requester = await this.userService.findById(requesterId);
+      if (requester?.email?.toLowerCase() !== email) {
+        const emailOwner = await this.userService.findByEmail(email);
+        if (emailOwner) {
+          const emailOwnerWithRole = await this.userService.findById(emailOwner.id);
+          if (['SO', 'DOANH_NGHIEP'].includes(emailOwnerWithRole?.role.role)) resolvedUserId = emailOwnerWithRole.id;
+        }
+      }
+    }
     if (resolvedUserId !== requesterId && requesterRole !== 'SO') {
       throw new ForbiddenException('Chỉ tài khoản Sở mới được đổi email cho tài khoản khác.');
     }
     const target = await this.userService.findById(resolvedUserId);
     if (!target) throw new NotFoundException('Không tìm thấy tài khoản cần xác minh email.');
-    if (targetUserId && target.role.role !== 'SO') {
-      throw new BadRequestException('Chỉ truyền targetUserId khi SO xác minh email cho tài khoản SO khác.');
+    if (targetUserId && !['SO', 'DOANH_NGHIEP'].includes(target.role.role)) {
+      throw new BadRequestException('Chỉ hỗ trợ xác minh email cho tài khoản SO hoặc doanh nghiệp.');
     }
     return target;
   }

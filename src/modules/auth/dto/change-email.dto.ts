@@ -16,7 +16,7 @@ export class VerifyChangeEmailOtpDto {
   @IsString() @IsNotEmpty() @Matches(/^\d{6}$/)
   otpCode: string;
 
-  @ApiPropertyOptional({ description: 'Target user ID when an SO verifies an OTP for another SO account.' })
+  @ApiPropertyOptional({ description: 'Target user ID when an SO verifies an OTP for another SO or enterprise account. If omitted, BE resolves the target from the current email.' })
   @IsOptional() @IsUUID('4')
   targetUserId?: string;
 }

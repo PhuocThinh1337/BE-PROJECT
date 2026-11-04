@@ -66,7 +66,7 @@ export class AuthController {
   @Post('email-otp')
   @HttpCode(HttpStatus.OK)
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Gửi OTP; CHANGE_EMAIL yêu cầu Bearer token. SO có thể truyền targetUserId để đổi email cho SO khác.' })
+  @ApiOperation({ summary: 'Gửi OTP; CHANGE_EMAIL yêu cầu Bearer token. SO có thể truyền targetUserId để đổi email cho tài khoản SO hoặc doanh nghiệp.' })
   sendEmailOtp(@Req() request: any, @Body() body: EmailOtpRequestDto) {
     return this.authService.sendEmailOtp(body.email, body.purpose as EmailOtpPurpose, request.user?.id, request.user?.role, body.targetUserId);
   }
@@ -88,7 +88,7 @@ export class AuthController {
   @Patch('change-email/:userId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'SO đổi email doanh nghiệp không cần OTP hoặc tài khoản SO sau khi xác minh OTP' })
+  @ApiOperation({ summary: 'SO đổi email tài khoản SO hoặc doanh nghiệp sau khi xác minh OTP' })
   changeAccountEmail(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: ChangeEmailDto) {
     return this.authService.changeManagedAccountEmail(request.user.role, userId, body.newEmail);
   }

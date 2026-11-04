@@ -11,7 +11,7 @@ export class EmailOtpRequestDto {
   @IsEnum(EmailOtpPurpose)
   purpose: EmailOtpPurpose;
 
-  @ApiPropertyOptional({ description: 'Target user ID when an SO requests an OTP for another SO account.' })
+  @ApiPropertyOptional({ description: 'Target user ID when an SO requests an OTP for another SO or enterprise account. If omitted, BE resolves the target from the current email.' })
   @IsOptional() @IsUUID('4')
   targetUserId?: string;
 }
