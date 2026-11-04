@@ -1,9 +1,12 @@
-﻿import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+
 export class ChangeEmailDto {
-  @ApiProperty({ example: 'new-address@example.com' }) @IsEmail()
+  @ApiProperty({ example: 'new-address@example.com' })
+  @IsEmail() @MaxLength(254)
   newEmail: string;
 }
+
 export class VerifyChangeEmailOtpDto {
   @ApiProperty({ example: 'new-address@example.com' })
   @IsEmail() @MaxLength(254)
@@ -12,4 +15,8 @@ export class VerifyChangeEmailOtpDto {
   @ApiProperty({ example: '123456' })
   @IsString() @IsNotEmpty() @Matches(/^\d{6}$/)
   otpCode: string;
+
+  @ApiPropertyOptional({ description: 'Target user ID when an SO verifies an OTP for another SO account.' })
+  @IsOptional() @IsUUID('4')
+  targetUserId?: string;
 }

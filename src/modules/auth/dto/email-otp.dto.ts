@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
 import { EmailOtpPurpose } from '../email-otp-purpose.enum';
 
 export class EmailOtpRequestDto {
@@ -10,6 +10,10 @@ export class EmailOtpRequestDto {
   @ApiProperty({ enum: EmailOtpPurpose })
   @IsEnum(EmailOtpPurpose)
   purpose: EmailOtpPurpose;
+
+  @ApiPropertyOptional({ description: 'Target user ID when an SO requests an OTP for another SO account.' })
+  @IsOptional() @IsUUID('4')
+  targetUserId?: string;
 }
 
 export class VerifyEmailOtpDto {

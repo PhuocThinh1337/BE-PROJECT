@@ -66,16 +66,16 @@ export class AuthController {
   @Post('email-otp')
   @HttpCode(HttpStatus.OK)
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Gửi OTP; purpose CHANGE_EMAIL yêu cầu Bearer token, các mục đích khác không yêu cầu đăng nhập' })
+  @ApiOperation({ summary: 'Gửi OTP; CHANGE_EMAIL yêu cầu Bearer token. SO có thể truyền targetUserId để đổi email cho SO khác.' })
   sendEmailOtp(@Req() request: any, @Body() body: EmailOtpRequestDto) {
-    return this.authService.sendEmailOtp(body.email, body.purpose as EmailOtpPurpose, request.user?.id);
+    return this.authService.sendEmailOtp(body.email, body.purpose as EmailOtpPurpose, request.user?.id, request.user?.role, body.targetUserId);
   }
 
   @Post('change-email/verify-otp')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   verifyChangeEmailOtp(@Req() request: any, @Body() body: VerifyChangeEmailOtpDto) {
-    return this.authService.verifyChangeEmailOtp(request.user.id, body.email, body.otpCode);
+    return this.authService.verifyChangeEmailOtp(request.user.id, body.email, body.otpCode, request.user.role, body.targetUserId);
   }
 
   @Patch('change-email')
@@ -88,9 +88,9 @@ export class AuthController {
   @Patch('change-email/:userId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Sở cập nhật email tài khoản doanh nghiệp không cần OTP' })
-  changeEnterpriseEmail(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: ChangeEmailDto) {
-    return this.authService.changeEnterpriseEmail(request.user.role, userId, body.newEmail);
+  @ApiOperation({ summary: 'SO đổi email doanh nghiệp không cần OTP hoặc tài khoản SO sau khi xác minh OTP' })
+  changeAccountEmail(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: ChangeEmailDto) {
+    return this.authService.changeManagedAccountEmail(request.user.role, userId, body.newEmail);
   }
 
   @Post('register-enterprise/verify-email-otp')

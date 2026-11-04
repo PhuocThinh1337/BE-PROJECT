@@ -153,7 +153,6 @@ export class EnterpriseService {
       if (record.otherDocumentUrl) oldFilesToRemove.push(record.otherDocumentUrl);
       this.clearStoredFile(record, 'otherDocument');
     }
-    record.user.fullname = input.name;
     record.user.email = input.email;
     await this.users.save(record.user);
     await this.enterprises.save(record);

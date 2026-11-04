@@ -32,12 +32,12 @@ Swagger docs: `http://localhost:3001/api/v1/api-docs`.
 - `GET /auth/me`: current account; requires `Authorization: Bearer <accessToken>`.
 - `POST /auth/refresh`: accepts `{ "refreshToken": "..." }`, rotates it, and issues a new access token.
 - `POST /auth/logout`: revokes the current session; requires a bearer access token.
-- `POST /auth/email-otp`: sends/resends an OTP; body `{ "email": "...", "purpose": "FORGOT_PASSWORD|CHANGE_EMAIL|REGISTER_ENTERPRISE" }`. `CHANGE_EMAIL` needs the current account's bearer token.
+- `POST /auth/email-otp`: sends/resends an OTP; body `{ "email": "...", "purpose": "FORGOT_PASSWORD|CHANGE_EMAIL|REGISTER_ENTERPRISE" }`. `CHANGE_EMAIL` needs a bearer token. An SO changing another SO account also sends `targetUserId` in the OTP request and verification request.
 - `POST /auth/reset-password`: validates the OTP and password confirmation, then revokes existing sessions.
 - `PATCH /auth/change-password`: requires a bearer access token and current/new password; revokes all sessions after success.
 - `POST /auth/change-email/verify-otp`: verifies `{ "email": "new-address@example.com", "otpCode": "123456" }` after requesting a `CHANGE_EMAIL` OTP.
 - `PATCH /auth/change-email`: saves `{ "newEmail": "new-address@example.com" }` after OTP verification.
-- `PATCH /auth/change-email/:userId`: lets an SO account change a DOANH_NGHIEP account email without OTP.
+- `PATCH /auth/change-email/:userId`: lets an SO account change a DOANH_NGHIEP email without OTP, or an SO account email after OTP verification.
 - `POST /auth/:userId/initialize-password`: lets an SO account set the target user's password; only that user's sessions are revoked.
 - `POST /auth/register-enterprise/verify-email-otp`: verifies `{ "email": "...", "otpCode": "123456" }` before public enterprise registration.
 - `POST /enterprises` can be used publicly after email OTP verification, or by a logged-in SO account without OTP. `GET /business-types` and `GET /business-industries` are public for enterprise signup.
