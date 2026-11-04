@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { createHash, createHmac, randomInt, randomUUID, timingSafeEqual } from 'crypto';
 import * as argon2 from 'argon2';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { User } from '../user/user.entity';
 import { UserService } from '../user/user.service';
 import { MailService } from './mail.service';
@@ -203,12 +203,11 @@ export class AuthService {
       where: {
         requestedByUserId: userId,
         purpose: EmailOtpPurpose.CHANGE_EMAIL,
-        verifiedAt: Not(IsNull()),
         consumedAt: IsNull(),
       },
       order: { createdAt: 'DESC' },
     });
-    return record && record.expiresAt.getTime() > Date.now() ? record : undefined;
+    return record?.verifiedAt && record.expiresAt.getTime() > Date.now() ? record : undefined;
   }
 
   private async resolveEmailChangeTarget(requesterId: string, requesterRole?: string, targetUserId?: string, email?: string) {
