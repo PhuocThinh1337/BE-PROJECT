@@ -11,7 +11,8 @@ export class RoleService {
     const roles = await this.roleRepository.find({ order: { id: 'ASC' } });
     return {
       success: true,
-      data: roles.map(({ id, role, name }) => ({ id, role, name })),
+      message: 'Lấy danh sách vai trò thành công.',
+      data: roles.map(({ id, role, name }) => ({ roleId: id, code: role, name })),
     };
   }
 }

@@ -88,9 +88,9 @@ export class AuthController {
   @Patch('change-email/:userId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'SO đổi email tài khoản SO hoặc doanh nghiệp sau khi xác minh OTP' })
+  @ApiOperation({ summary: 'Sở cập nhật email tài khoản khác; OTP chỉ cần khi tự đổi email' })
   changeAccountEmail(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() request: any, @Body() body: ChangeEmailDto) {
-    return this.authService.changeManagedAccountEmail(request.user.role, userId, body.newEmail);
+    return this.authService.changeManagedAccountEmail(request.user.id, request.user.role, userId, body.newEmail);
   }
 
   @Post('register-enterprise/verify-email-otp')

@@ -18,10 +18,14 @@ import { AddEnterpriseFileMetadata1770000000000 } from './database/migrations/17
 import { ExpandEnterpriseTaxCodeLength1780000000000 } from './database/migrations/1780000000000-ExpandEnterpriseTaxCodeLength';
 import { AddEmailOtpsAndVietnamTaxCodeFormat1790000000000 } from './database/migrations/1790000000000-AddEmailOtpsAndVietnamTaxCodeFormat';
 import { BackfillEnterpriseTaxCodes1800000000000 } from './database/migrations/1800000000000-BackfillEnterpriseTaxCodes';
+import { CreateAccidentReports1810000000000 } from './database/migrations/1810000000000-CreateAccidentReports';
 import { Enterprise } from './modules/enterprise/enterprise.entity';
 import { BusinessIndustry, BusinessType } from './modules/enterprise/enterprise-reference.entity';
 import { EnterpriseModule } from './modules/enterprise/enterprise.module';
 import { load } from './config';
+import { AccidentReport } from './modules/accident-report/accident-report.entity';
+import { AccidentCategory } from './modules/accident-report/accident-category.entity';
+import { AccidentReportModule } from './modules/accident-report/accident-report.module';
 
 @Module({
   imports: [
@@ -33,7 +37,7 @@ import { load } from './config';
       username: process.env.VNA_DB_USER,
       password: process.env.VNA_DB_PASSWORD,
       database: process.env.VNA_DB_DATABASE,
-      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry],
+      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry, AccidentReport, AccidentCategory],
       migrations: [
         CreateAuthSessions1700000000000,
         AddUserProfileAndEmailChangeRequests1710000000000,
@@ -46,12 +50,14 @@ import { load } from './config';
         ExpandEnterpriseTaxCodeLength1780000000000,
         AddEmailOtpsAndVietnamTaxCodeFormat1790000000000,
         BackfillEnterpriseTaxCodes1800000000000,
+        CreateAccidentReports1810000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',
     }),
     AuthModule,
     EnterpriseModule,
+    AccidentReportModule,
   ],
 })
 export class AppModule {}

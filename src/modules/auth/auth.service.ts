@@ -173,7 +173,7 @@ export class AuthService {
     await this.emailOtpRepository.save(record);
   }
 
-  async changeManagedAccountEmail(requesterRole: string, targetUserId: string, newEmail: string) {
+  async changeManagedAccountEmail(requesterId: string, requesterRole: string, targetUserId: string, newEmail: string) {
     if (requesterRole !== 'SO') throw new ForbiddenException('Chỉ tài khoản Sở mới được cập nhật email tài khoản khác.');
     const target = await this.userService.findById(targetUserId);
     if (!target) throw new NotFoundException('Không tìm thấy tài khoản cần cập nhật email.');
@@ -183,7 +183,7 @@ export class AuthService {
     const existing = await this.userService.findByEmail(normalizedEmail);
     if (existing && existing.id !== targetUserId) throw new ConflictException('Email này đã được sử dụng.');
     const otpRecord = await this.findVerifiedEmailChangeOtp(targetUserId);
-    if (!otpRecord) {
+    if (requesterId === targetUserId && !otpRecord) {
       throw new BadRequestException('Tài khoản cần xác minh OTP trước khi cập nhật email.');
     }
     target.email = normalizedEmail;

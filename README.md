@@ -32,16 +32,26 @@ Swagger docs: `http://localhost:3001/api/v1/api-docs`.
 - `GET /auth/me`: current account; requires `Authorization: Bearer <accessToken>`.
 - `POST /auth/refresh`: accepts `{ "refreshToken": "..." }`, rotates it, and issues a new access token.
 - `POST /auth/logout`: revokes the current session; requires a bearer access token.
-- `POST /auth/email-otp`: sends/resends an OTP; body `{ "email": "...", "purpose": "FORGOT_PASSWORD|CHANGE_EMAIL|REGISTER_ENTERPRISE" }`. `CHANGE_EMAIL` needs a bearer token. An SO may include `targetUserId` when changing another SO or enterprise account; when omitted, BE resolves the account from the current email. Both target types must verify OTP.
+- `POST /auth/email-otp`: sends/resends an OTP; body `{ "email": "...", "purpose": "FORGOT_PASSWORD|CHANGE_EMAIL|REGISTER_ENTERPRISE" }`. `CHANGE_EMAIL` needs a bearer token. An SO may include `targetUserId` when requesting OTP for another account; when omitted, BE resolves the account from the current email.
 - `POST /auth/reset-password`: validates the OTP and password confirmation, then revokes existing sessions.
 - `PATCH /auth/change-password`: requires a bearer access token and current/new password; revokes all sessions after success.
-- `POST /auth/change-email/verify-otp`: verifies `{ "email": "new-address@example.com", "otpCode": "123456" }` after requesting a `CHANGE_EMAIL` OTP.
+- `POST /auth/change-email/verify-otp`: verifies the OTP sent to the account's current email, for example `{ "email": "current-address@example.com", "otpCode": "123456", "targetUserId": "<user-uuid>" }` when an SO is changing another account.
 - `PATCH /auth/change-email`: saves `{ "newEmail": "new-address@example.com" }` after OTP verification.
-- `PATCH /auth/change-email/:userId`: lets an SO account change a DOANH_NGHIEP email without OTP, or an SO account email after OTP verification.
+- `PATCH /auth/change-email/:userId`: lets an SO account update another SO or DOANH_NGHIEP email without OTP; changing the signed-in account itself requires OTP.
 - `POST /auth/:userId/initialize-password`: lets an SO account set the target user's password; only that user's sessions are revoked.
 - `POST /auth/register-enterprise/verify-email-otp`: verifies `{ "email": "...", "otpCode": "123456" }` before public enterprise registration.
 - `POST /enterprises` can be used publicly after email OTP verification, or by a logged-in SO account without OTP. `GET /business-types` and `GET /business-industries` are public for enterprise signup.
 - `GET /enterprises/me` and `PUT /enterprises/me` return/update the logged-in `DOANH_NGHIEP` account's enterprise record.
+
+## Accident reports
+
+- The BE creates `SIX_MONTHS` and `FULL_YEAR` report records for each enterprise for the current year. Missing records for a requested year are created when the report list is requested.
+- `GET /accident-reports` lists all enterprises' reports for the SO role. `GET /accident-reports/me` lists only the signed-in enterprise's reports. Both accept `page`, `size`, `name`, `taxCode`, `reportPeriod`, `status`, `province`, `ward`, and `year`; when `year` is omitted the newest report year is used.
+- `GET /accident-reports/:id` returns report details. SO can view all reports; DOANH_NGHIEP can view only its own.
+- `PUT /accident-reports/:id` saves report progress as `IN_PROGRESS`. Include a `stampedReport` PDF to submit it and move it to `ACCEPTED`. Accepted reports cannot be edited.
+- `GET /accident-reports/:id/summary` returns the per-report aggregates. `GET /accident-reports/summary?year=` returns totals for accepted reports only. SO can export individual reports with `GET /accident-reports/:id/export` and the annual aggregate with `GET /accident-reports/summary/export?year=` (Word-compatible `.doc`).
+- `GET /categories?type=INJURY_FACTOR|INJURY_TYPE|OCCUPATION` returns active reporting categories.
+- Apply migration `CreateAccidentReports1810000000000` before starting the report module with schema synchronization disabled.
 
 Refresh tokens are stored only as hashes in the `auth_sessions` table. Access tokens expire after 15 minutes. Logout and password changes revoke the corresponding database sessions, so protected requests reject those tokens immediately.
 
