@@ -8,6 +8,7 @@ import { Enterprise } from '../enterprise/enterprise.entity';
 import { AccidentCategory, AccidentCategoryType } from './accident-category.entity';
 import { AccidentReport, AccidentReportPeriod, AccidentReportStatus } from './accident-report.entity';
 import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 
 const victimFields = [
   'totalCases', 'fatalCases', 'totalCasesWithTwoOrMoreVictims', 'totalVictims', 'nonManagedVictims',
@@ -239,15 +240,16 @@ export class AccidentReportService implements OnModuleInit {
     };
   }
 
-  private toDetail(report: AccidentReport) {
+  private toDetail(report: AccidentReport): AccidentReportDetailResponse {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, year: report.year,
-      reportPeriod: report.reportPeriod, status: report.status, name: report.enterprise.name,
-      taxCode: report.enterprise.taxCode, businessTypeId: report.enterprise.businessTypeId,
-      businessIndustryId: report.enterprise.businessIndustryId, totalEmployees: report.totalEmployees,
+      reportPeriod: report.reportPeriod, status: report.status, companyName: report.enterprise.name,
+      taxCode: report.enterprise.taxCode, businessTypeName: report.enterprise.businessType.name,
+      businessIndustryName: report.enterprise.businessIndustry.name, totalEmployees: report.totalEmployees,
       femaleEmployees: report.femaleEmployees, totalSalaryFund: report.totalSalaryFund,
       accidentTotals: report.accidentTotals && this.normalizeStats(report.accidentTotals as any),
-      accidentDetails: report.accidentDetails, subsidizedAccident: report.subsidizedAccident && this.normalizeStats(report.subsidizedAccident as any),
+      accidentDetails: report.accidentDetails as unknown as AccidentDetailDto[] | null,
+      subsidizedAccident: report.subsidizedAccident && this.normalizeStats(report.subsidizedAccident as any),
       stampedReport: report.stampedReportUrl ? {
         fileName: report.stampedReportFileName, contentType: report.stampedReportContentType,
         size: report.stampedReportSize, url: report.stampedReportUrl,
