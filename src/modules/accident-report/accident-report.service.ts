@@ -341,6 +341,8 @@ export class AccidentReportService implements OnModuleInit {
       }
       const group = groups.get(id);
       for (const field of victimFields) group[field] += numberValue(detail[field]);
+      for (const field of expenseFields) group[field] += numberValue(detail[field]);
+      group.totalExpense = group.medicalExpense + group.salaryExpenseDuringTreatment + group.compensationExpense;
     }
     return Array.from(groups.values());
   }

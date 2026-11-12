@@ -35,7 +35,6 @@ import { Enterprise } from '../enterprise/enterprise.entity';
   ],
   controllers: [AuthController, UserController, RoleController],
   providers: [AuthService, LocalStrategy, JwtAuthGuard, OptionalJwtAuthGuard, MailService, RoleService],
-  exports: [AuthService, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, JwtModule, TypeOrmModule],
 })
 export class AuthModule {}
-
