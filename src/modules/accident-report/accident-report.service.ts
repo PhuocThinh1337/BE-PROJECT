@@ -7,6 +7,9 @@ import { randomUUID } from 'crypto';
 import { Enterprise } from '../enterprise/enterprise.entity';
 import { AccidentCategory, AccidentCategoryType } from './accident-category.entity';
 import { AccidentReport, AccidentReportPeriod, AccidentReportStatus } from './accident-report.entity';
+import { AccidentStats } from './accident-stats.entity';
+import { AccidentDetail } from './accident-detail.entity';
+import { AccidentReportDetail } from './accident-report-detail.entity';
 import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 
@@ -29,6 +32,9 @@ export class AccidentReportService implements OnModuleInit {
     @InjectRepository(AccidentReport) private readonly reports: Repository<AccidentReport>,
     @InjectRepository(Enterprise) private readonly enterprises: Repository<Enterprise>,
     @InjectRepository(AccidentCategory) private readonly categories: Repository<AccidentCategory>,
+    @InjectRepository(AccidentStats) private readonly stats: Repository<AccidentStats>,
+    @InjectRepository(AccidentDetail) private readonly details: Repository<AccidentDetail>,
+    @InjectRepository(AccidentReportDetail) private readonly detailLinks: Repository<AccidentReportDetail>,
   ) {}
 
   async onModuleInit() {
@@ -81,15 +87,17 @@ export class AccidentReportService implements OnModuleInit {
     if (input.totalEmployees !== undefined) report.totalEmployees = input.totalEmployees;
     if (input.femaleEmployees !== undefined) report.femaleEmployees = input.femaleEmployees;
     if (input.totalSalaryFund !== undefined) report.totalSalaryFund = input.totalSalaryFund;
-    if (input.accidentTotals !== undefined) report.accidentTotals = input.accidentTotals === null ? null : this.normalizeStats(input.accidentTotals);
-    if (input.accidentDetails !== undefined) report.accidentDetails = input.accidentDetails === null ? null : input.accidentDetails.map((item) => this.normalizeDetail(item));
-    if (input.subsidizedAccident !== undefined) report.subsidizedAccident = input.subsidizedAccident === null ? null : this.normalizeStats(input.subsidizedAccident);
+    const stored = this.toStoredData(report);
+    if (input.accidentTotals !== undefined) stored.accidentTotals = input.accidentTotals === null ? null : this.normalizeStats(input.accidentTotals);
+    if (input.accidentDetails !== undefined) stored.accidentDetails = input.accidentDetails === null ? null : input.accidentDetails.map((item) => this.normalizeDetail(item));
+    if (input.subsidizedAccident !== undefined) stored.subsidizedAccident = input.subsidizedAccident === null ? null : this.normalizeStats(input.subsidizedAccident);
+    const reportData = { ...report, ...stored } as any;
 
     this.validateReportData(report);
-    await this.validateDetailCategories(report.accidentDetails);
+    await this.validateDetailCategories(stored.accidentDetails);
     if (stampedReport) {
       this.validateStampedPdf(stampedReport);
-      this.validateReportComplete(report);
+      this.validateReportComplete(reportData);
       const stored = await this.storeStampedPdf(stampedReport);
       if (report.stampedReportUrl) await this.removeStampedPdf(report.stampedReportUrl);
       report.stampedReportUrl = stored.url;
@@ -101,15 +109,17 @@ export class AccidentReportService implements OnModuleInit {
       report.status = AccidentReportStatus.IN_PROGRESS;
     }
     const saved = await this.reports.save(report);
-    return { message: stampedReport ? 'Gửi báo cáo thành công.' : 'Lưu tiến độ báo cáo thành công.', data: this.toDetail(saved) };
+    await this.persistNormalizedData(report.id, stored, input);
+    const reloaded = await this.findReport(saved.id);
+    return { message: stampedReport ? 'Gửi báo cáo thành công.' : 'Lưu tiến độ báo cáo thành công.', data: this.toDetail(reloaded) };
   }
 
   async getReportSummary(id: string, userId: string, role: string) {
     const report = await this.findReport(id);
     this.assertCanView(report, userId, role);
-    const accident = this.normalizeStats(report.accidentTotals as any);
-    const subsidizedAccident = this.normalizeStats(report.subsidizedAccident as any);
-    const details = report.accidentDetails || [];
+    const accident = this.normalizeStats(this.toStoredData(report).accidentTotals as any);
+    const subsidizedAccident = this.normalizeStats(this.toStoredData(report).subsidizedAccident as any);
+    const details = this.toStoredData(report).accidentDetails || [];
     const [injuryTypes, injuryFactors, occupations] = await Promise.all([
       this.groupDetails(details, 'injuryTypeId'), this.groupDetails(details, 'injuryFactorId'), this.groupDetails(details, 'occupationId'),
     ]);
@@ -127,10 +137,10 @@ export class AccidentReportService implements OnModuleInit {
     const resolvedYear = await this.resolveYear(year);
     const reports = await this.reports.find({
       where: { year: resolvedYear, status: AccidentReportStatus.ACCEPTED },
-      relations: ['enterprise', 'enterprise.businessType'],
+      relations: ['enterprise', 'enterprise.businessType', 'stats', 'detailLinks', 'detailLinks.accidentDetail'],
       order: { createdAt: 'ASC' },
     });
-    const allDetails = reports.reduce((result, report) => result.concat(report.accidentDetails || []), [] as any[]);
+    const allDetails = reports.reduce((result, report) => result.concat(this.toStoredData(report).accidentDetails || []), [] as any[]);
     const [injuryTypes, injuryFactors, occupations] = await Promise.all([
       this.groupDetails(allDetails, 'injuryTypeId'),
       this.groupDetails(allDetails, 'injuryFactorId'),
@@ -140,9 +150,9 @@ export class AccidentReportService implements OnModuleInit {
     for (const report of reports) {
       const type = report.enterprise.businessType;
       if (!businessTypeMap.has(type.id)) businessTypeMap.set(type.id, { businessTypeId: type.id, name: type.name, code: type.code, ...zeroStats() });
-      Object.assign(businessTypeMap.get(type.id), this.sumStats([businessTypeMap.get(type.id), this.normalizeStats(report.accidentTotals as any)]));
+      Object.assign(businessTypeMap.get(type.id), this.sumStats([businessTypeMap.get(type.id), this.normalizeStats(this.toStoredData(report).accidentTotals as any)]));
     }
-    const accidentStats = reports.map((report) => this.normalizeStats(report.accidentTotals as any));
+    const accidentStats = reports.map((report) => this.normalizeStats(this.toStoredData(report).accidentTotals as any));
     return {
       message: 'Lấy báo cáo tổng hợp thành công.',
       data: {
@@ -162,13 +172,13 @@ export class AccidentReportService implements OnModuleInit {
       ['Doanh nghiệp', report.enterprise.name], ['Mã số thuế', report.enterprise.taxCode], ['Năm', report.year],
       ['Kỳ báo cáo', report.reportPeriod], ['Trạng thái', report.status],
       ['Tổng số lao động', report.totalEmployees], ['Lao động nữ', report.femaleEmployees], ['Tổng quỹ lương', report.totalSalaryFund],
-      ['Số vụ tai nạn', (report.accidentTotals as any)?.totalCases], ['Số người bị nạn', (report.accidentTotals as any)?.totalVictims],
+      ['Số vụ tai nạn', (this.toStoredData(report).accidentTotals as any)?.totalCases], ['Số người bị nạn', (this.toStoredData(report).accidentTotals as any)?.totalVictims],
       ['Tổng chi phí', summary.accidentDamage.totalExpense],
     ];
-    const categoryIds = (report.accidentDetails || []).reduce((ids: string[], item: any) => ids.concat([item.injuryTypeId, item.injuryFactorId, item.occupationId]), []);
+    const categoryIds = (this.toStoredData(report).accidentDetails || []).reduce((ids: string[], item: any) => ids.concat([item.injuryTypeId, item.injuryFactorId, item.occupationId]), []);
     const categoryRows = categoryIds.length ? await this.categories.find({ where: { id: In(categoryIds) } }) : [];
     const categoryNames = new Map(categoryRows.map((item) => [item.id, item.name]));
-    const detailRows = (report.accidentDetails || []).map((item: any, index) => `<tr><td>${index + 1}</td><td>${this.escapeHtml(categoryNames.get(item.injuryTypeId) || '')}</td><td>${this.escapeHtml(categoryNames.get(item.injuryFactorId) || '')}</td><td>${this.escapeHtml(categoryNames.get(item.occupationId) || '')}</td><td>${item.totalVictims || 0}</td><td>${item.totalFatalVictims || 0}</td><td>${item.totalSeverelyInjuredVictims || 0}</td></tr>`).join('');
+    const detailRows = (this.toStoredData(report).accidentDetails || []).map((item: any, index) => `<tr><td>${index + 1}</td><td>${this.escapeHtml(categoryNames.get(item.injuryTypeId) || '')}</td><td>${this.escapeHtml(categoryNames.get(item.injuryFactorId) || '')}</td><td>${this.escapeHtml(categoryNames.get(item.occupationId) || '')}</td><td>${item.totalVictims || 0}</td><td>${item.totalFatalVictims || 0}</td><td>${item.totalSeverelyInjuredVictims || 0}</td></tr>`).join('');
     return this.wordDocument(`Báo cáo tai nạn lao động ${report.year}`, rows, `<h2>Chi tiết tai nạn</h2><table><tr><th>STT</th><th>Loại chấn thương</th><th>Yếu tố chấn thương</th><th>Nghề nghiệp</th><th>Người bị nạn</th><th>Tử vong</th><th>Bị thương nặng</th></tr>${detailRows}</table>`);
   }
 
@@ -222,11 +232,48 @@ export class AccidentReportService implements OnModuleInit {
   }
 
   private async findReport(id: string) {
-    const report = await this.reports.findOne({ where: { id }, relations: ['enterprise', 'enterprise.businessType', 'enterprise.businessIndustry'] });
+    const report = await this.reports.findOne({ where: { id }, relations: ['enterprise', 'enterprise.businessType', 'enterprise.businessIndustry', 'stats', 'detailLinks', 'detailLinks.accidentDetail'] });
     if (!report) throw new NotFoundException('Không tìm thấy báo cáo tai nạn lao động.');
     return report;
   }
 
+  private toStoredData(report: AccidentReport) {
+    const stats = report.stats || [];
+    const projectStats = (item?: AccidentStats) => {
+      if (!item) return null;
+      const output: any = zeroStats();
+      Object.keys(output).forEach((key) => { output[key] = item[key]; });
+      return this.normalizeStats(output);
+    };
+    return {
+      accidentTotals: projectStats(stats.find((item) => !item.isSubsidizedAccident)),
+      subsidizedAccident: projectStats(stats.find((item) => item.isSubsidizedAccident)),
+      accidentDetails: (report.detailLinks || []).filter((link) => !!link.accidentDetail).map((link) => {
+        const output: any = { accidentDetailId: link.accidentDetail.id };
+        Object.keys(zeroStats()).forEach((key) => { output[key] = link.accidentDetail[key]; });
+        ['injuryTypeId', 'injuryFactorId', 'occupationId'].forEach((key) => { output[key] = link.accidentDetail[key]; });
+        return output;
+      }),
+    };
+  }
+
+  private async persistNormalizedData(reportId: string, data: any, input: UpdateAccidentReportDto) {
+    for (const item of [{ value: input.accidentTotals, subsidized: false }, { value: input.subsidizedAccident, subsidized: true }]) {
+      if (item.value === undefined) continue;
+      await this.stats.delete({ accidentReportId: reportId, isSubsidizedAccident: item.subsidized });
+      if (item.value !== null) await this.stats.save(this.stats.create({ ...this.normalizeStats(item.value), accidentReportId: reportId, isSubsidizedAccident: item.subsidized }));
+    }
+    if (input.accidentDetails !== undefined) {
+      const links = await this.detailLinks.find({ where: { accidentReportId: reportId } });
+      const ids = links.map((link) => link.accidentDetailId);
+      if (links.length) await this.detailLinks.remove(links);
+      if (ids.length) await this.details.delete(ids);
+      if (input.accidentDetails) for (const item of data.accidentDetails) {
+        const detail = await this.details.save(this.details.create(item as any) as unknown as AccidentDetail);
+        await this.detailLinks.save(this.detailLinks.create({ accidentReportId: reportId, accidentDetailId: detail.id }));
+      }
+    }
+  }
   private assertCanView(report: AccidentReport, userId: string, role: string) {
     if (role === 'SO') return;
     if (role !== 'DOANH_NGHIEP' || report.enterprise.userId !== userId) throw new ForbiddenException('Bạn không có quyền xem báo cáo này.');
@@ -247,9 +294,9 @@ export class AccidentReportService implements OnModuleInit {
       taxCode: report.enterprise.taxCode, businessTypeName: report.enterprise.businessType.name,
       businessIndustryName: report.enterprise.businessIndustry.name, totalEmployees: report.totalEmployees,
       femaleEmployees: report.femaleEmployees, totalSalaryFund: report.totalSalaryFund,
-      accidentTotals: report.accidentTotals && this.normalizeStats(report.accidentTotals as any),
-      accidentDetails: report.accidentDetails as unknown as AccidentDetailDto[] | null,
-      subsidizedAccident: report.subsidizedAccident && this.normalizeStats(report.subsidizedAccident as any),
+      accidentTotals: this.toStoredData(report).accidentTotals,
+      accidentDetails: this.toStoredData(report).accidentDetails as unknown as AccidentDetailDto[] | null,
+      subsidizedAccident: this.toStoredData(report).subsidizedAccident,
       stampedReport: report.stampedReportUrl ? {
         fileName: report.stampedReportFileName, contentType: report.stampedReportContentType,
         size: report.stampedReportSize, url: report.stampedReportUrl,
@@ -274,9 +321,9 @@ export class AccidentReportService implements OnModuleInit {
     if (report.totalEmployees !== null && report.femaleEmployees !== null && report.femaleEmployees > report.totalEmployees) {
       throw new BadRequestException('Số lao động nữ không được vượt quá tổng số lao động.');
     }
-    this.validateStats(report.accidentTotals, 'Tai nạn lao động');
-    this.validateStats(report.subsidizedAccident, 'Tai nạn được hưởng trợ cấp');
-    for (const item of report.accidentDetails || []) this.validateStats(item as any, 'Chi tiết tai nạn');
+    this.validateStats((report as any).accidentTotals, 'Tai nạn lao động');
+    this.validateStats((report as any).subsidizedAccident, 'Tai nạn được hưởng trợ cấp');
+    for (const item of this.toStoredData(report).accidentDetails || []) this.validateStats(item as any, 'Chi tiết tai nạn');
   }
 
   private validateStats(stats: any, label: string) {
@@ -300,7 +347,7 @@ export class AccidentReportService implements OnModuleInit {
 
   private validateReportComplete(report: AccidentReport) {
     if (report.totalEmployees === null || report.femaleEmployees === null || report.totalSalaryFund === null ||
-      !report.accidentTotals || report.accidentDetails === null) {
+      !(report as any).accidentTotals || (report as any).accidentDetails === null) {
       throw new BadRequestException('Vui lòng hoàn tất thông tin doanh nghiệp và số liệu tai nạn trước khi gửi báo cáo.');
     }
   }

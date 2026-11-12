@@ -25,6 +25,10 @@ import { EnterpriseModule } from './modules/enterprise/enterprise.module';
 import { load } from './config';
 import { AccidentReport } from './modules/accident-report/accident-report.entity';
 import { AccidentCategory } from './modules/accident-report/accident-category.entity';
+import { AccidentStats } from './modules/accident-report/accident-stats.entity';
+import { AccidentDetail } from './modules/accident-report/accident-detail.entity';
+import { AccidentReportDetail } from './modules/accident-report/accident-report-detail.entity';
+import { NormalizeAccidentReportTables1820000000000 } from './database/migrations/1820000000000-NormalizeAccidentReportTables';
 import { AccidentReportModule } from './modules/accident-report/accident-report.module';
 
 @Module({
@@ -37,7 +41,7 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
       username: process.env.VNA_DB_USER,
       password: process.env.VNA_DB_PASSWORD,
       database: process.env.VNA_DB_DATABASE,
-      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry, AccidentReport, AccidentCategory],
+      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry, AccidentReport, AccidentCategory, AccidentStats, AccidentDetail, AccidentReportDetail],
       migrations: [
         CreateAuthSessions1700000000000,
         AddUserProfileAndEmailChangeRequests1710000000000,
@@ -51,6 +55,7 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
         AddEmailOtpsAndVietnamTaxCodeFormat1790000000000,
         BackfillEnterpriseTaxCodes1800000000000,
         CreateAccidentReports1810000000000,
+        NormalizeAccidentReportTables1820000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

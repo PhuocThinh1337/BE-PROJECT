@@ -1,5 +1,7 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { Enterprise } from '../enterprise/enterprise.entity';
+import { AccidentStats } from './accident-stats.entity';
+import { AccidentReportDetail } from './accident-report-detail.entity';
 
 export enum AccidentReportPeriod {
   SIX_MONTHS = 'SIX_MONTHS',
@@ -28,9 +30,8 @@ export class AccidentReport {
   @Column({ type: 'int', nullable: true }) totalEmployees: number | null;
   @Column({ type: 'int', nullable: true }) femaleEmployees: number | null;
   @Column({ type: 'double precision', nullable: true }) totalSalaryFund: number | null;
-  @Column({ type: 'jsonb', nullable: true }) accidentTotals: Record<string, number> | null;
-  @Column({ type: 'jsonb', nullable: true }) accidentDetails: Record<string, unknown>[] | null;
-  @Column({ type: 'jsonb', nullable: true }) subsidizedAccident: Record<string, number> | null;
+  @OneToMany(() => AccidentStats, (stats) => stats.accidentReport) stats: AccidentStats[];
+  @OneToMany(() => AccidentReportDetail, (link) => link.accidentReport) detailLinks: AccidentReportDetail[];
 
   @Column({ nullable: true }) stampedReportUrl: string | null;
   @Column({ nullable: true }) stampedReportFileName: string | null;
