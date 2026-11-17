@@ -6,7 +6,7 @@ import { extname } from 'path';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccidentCategoryType } from './accident-category.entity';
 import { AccidentReportService } from './accident-report.service';
-import { ListAccidentCategoriesDto, ListAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { ListAccidentCategoriesDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 
 interface ReportPdfFile { originalname: string; mimetype: string; size: number; buffer: Buffer; }
 
@@ -87,6 +87,15 @@ export class AccidentReportController {
   @ApiOperation({ summary: 'Lấy chi tiết báo cáo; doanh nghiệp chỉ xem báo cáo của mình' })
   detail(@Param('id', new ParseUUIDPipe()) id: string, @Req() request: any) {
     return this.service.getReport(id, request.user.id, request.user.role);
+  }
+
+  @Put('accident-reports/review')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sở duyệt hoặc từ chối các báo cáo đã nộp' })
+  review(@Req() request: any, @Body() body: ReviewAccidentReportsDto) {
+    this.assertSo(request.user.role);
+    return this.service.reviewReports(body);
   }
 
   @Put('accident-reports/:id')

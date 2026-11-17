@@ -12,10 +12,11 @@ import { BusinessIndustry, BusinessType } from './enterprise-reference.entity';
 import { EnterpriseService } from './enterprise.service';
 import { EnterpriseReferenceController } from './enterprise-reference.controller';
 import { AuthModule } from '../auth/auth.module';
+import { AccidentReport } from '../accident-report/accident-report.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Enterprise, BusinessType, BusinessIndustry, Role, AuthSession]),
+    TypeOrmModule.forFeature([Enterprise, BusinessType, BusinessIndustry, Role, AuthSession, AccidentReport]),
     UserModule,
     AuthModule,
     JwtModule.registerAsync({

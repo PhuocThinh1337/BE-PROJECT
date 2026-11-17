@@ -29,6 +29,8 @@ import { AccidentStats } from './modules/accident-report/accident-stats.entity';
 import { AccidentDetail } from './modules/accident-report/accident-detail.entity';
 import { AccidentReportDetail } from './modules/accident-report/accident-report-detail.entity';
 import { NormalizeAccidentReportTables1820000000000 } from './database/migrations/1820000000000-NormalizeAccidentReportTables';
+import { AddAccidentStampedFileId1830000000000 } from './database/migrations/1830000000000-AddAccidentStampedFileId';
+import { AddAccidentReportReview1840000000000 } from './database/migrations/1840000000000-AddAccidentReportReview';
 import { AccidentReportModule } from './modules/accident-report/accident-report.module';
 
 @Module({
@@ -56,6 +58,8 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
         BackfillEnterpriseTaxCodes1800000000000,
         CreateAccidentReports1810000000000,
         NormalizeAccidentReportTables1820000000000,
+        AddAccidentStampedFileId1830000000000,
+        AddAccidentReportReview1840000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

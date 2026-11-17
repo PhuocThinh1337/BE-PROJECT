@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsIn, IsInt, IsNumber, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { AccidentCategoryType } from '../accident-category.entity';
 import { AccidentReportPeriod, AccidentReportStatus } from '../accident-report.entity';
 
@@ -58,6 +58,12 @@ export class UpdateAccidentReportDto {
   @IsOptional() @Transform(parseJson) @ValidateNested() @Type(() => AccidentStatsDto) accidentTotals?: AccidentStatsDto | null;
   @IsOptional() @Transform(parseJson) @ValidateNested({ each: true }) @Type(() => AccidentDetailDto) @IsArray() accidentDetails?: AccidentDetailDto[] | null;
   @IsOptional() @Transform(parseJson) @ValidateNested() @Type(() => AccidentStatsDto) subsidizedAccident?: AccidentStatsDto | null;
+}
+
+export class ReviewAccidentReportsDto {
+  @IsArray() @ArrayNotEmpty() @IsUUID('4', { each: true }) accidentReportIds: string[];
+  @IsIn([AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED]) status: AccidentReportStatus.APPROVED | AccidentReportStatus.DECLINED;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(500) note: string;
 }
 
 export class ListAccidentReportsDto {

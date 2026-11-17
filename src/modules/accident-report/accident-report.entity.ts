@@ -12,6 +12,9 @@ export enum AccidentReportStatus {
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
   ACCEPTED = 'ACCEPTED',
+  APPROVED = 'APPROVED',
+  DECLINED = 'DECLINED',
+  EXPIRED = 'EXPIRED',
 }
 
 @Entity('accident_reports')
@@ -26,6 +29,7 @@ export class AccidentReport {
   @Column({ type: 'int' }) year: number;
   @Column({ length: 20 }) reportPeriod: AccidentReportPeriod;
   @Column({ length: 20, default: AccidentReportStatus.PENDING }) status: AccidentReportStatus;
+  @Column({ type: 'text', nullable: true }) note: string | null;
 
   @Column({ type: 'int', nullable: true }) totalEmployees: number | null;
   @Column({ type: 'int', nullable: true }) femaleEmployees: number | null;
@@ -34,6 +38,7 @@ export class AccidentReport {
   @OneToMany(() => AccidentReportDetail, (link) => link.accidentReport) detailLinks: AccidentReportDetail[];
 
   @Column({ nullable: true }) stampedReportUrl: string | null;
+  @Column({ type: 'uuid', nullable: true }) stampedReportFileId: string | null;
   @Column({ nullable: true }) stampedReportFileName: string | null;
   @Column({ nullable: true, length: 150 }) stampedReportContentType: string | null;
   @Column({ type: 'int', nullable: true }) stampedReportSize: number | null;

@@ -10,7 +10,7 @@ import { AccidentReport, AccidentReportPeriod, AccidentReportStatus } from './ac
 import { AccidentStats } from './accident-stats.entity';
 import { AccidentDetail } from './accident-detail.entity';
 import { AccidentReportDetail } from './accident-report-detail.entity';
-import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 
 const victimFields = [
@@ -51,6 +51,36 @@ export class AccidentReportService implements OnModuleInit {
     ), [] as any[]);
     await this.reports.createQueryBuilder().insert().values(values as any)
       .onConflict('("enterpriseId", "year", "reportPeriod") DO NOTHING').execute();
+    const now = new Date();
+    const statuses = [AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS, AccidentReportStatus.ACCEPTED];
+    if (now >= new Date(year, 6, 5)) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
+      .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: AccidentReportPeriod.SIX_MONTHS, statuses }).execute();
+    if (now >= new Date(year + 1, 0, 10)) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
+      .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: AccidentReportPeriod.FULL_YEAR, statuses }).execute();
+  }
+
+  private deadline(report: AccidentReport) {
+    return report.reportPeriod === AccidentReportPeriod.SIX_MONTHS
+      ? new Date(report.year, 6, 5, 0, 0, 0, 0)
+      : new Date(report.year + 1, 0, 10, 0, 0, 0, 0);
+  }
+
+  private async expireIfOverdue(report: AccidentReport) {
+    if ([AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS, AccidentReportStatus.ACCEPTED].includes(report.status) && new Date() >= this.deadline(report)) {
+      report.status = AccidentReportStatus.EXPIRED;
+      await this.reports.save(report);
+    }
+    return report;
+  }
+
+  async reviewReports(input: ReviewAccidentReportsDto) {
+    const reports = await this.reports.find({ where: { id: In(input.accidentReportIds) } });
+    if (reports.length !== new Set(input.accidentReportIds).size) throw new NotFoundException('Không tìm thấy một hoặc nhiều báo cáo.');
+    for (const report of reports) await this.expireIfOverdue(report);
+    if (reports.some((report) => report.status !== AccidentReportStatus.ACCEPTED)) throw new ConflictException('Chỉ được duyệt hoặc từ chối báo cáo đang ở trạng thái ACCEPTED và chưa quá hạn.');
+    for (const report of reports) { report.status = input.status; report.note = input.note; }
+    await this.reports.save(reports);
+    return { message: 'Cập nhật trạng thái báo cáo thành công.', data: reports.map((report) => ({ accidentReportId: report.id, status: report.status, note: report.note })) };
   }
 
   async listForDepartment(query: ListAccidentReportsDto) {
@@ -73,7 +103,7 @@ export class AccidentReportService implements OnModuleInit {
   }
 
   async getReport(id: string, userId: string, role: string) {
-    const report = await this.findReport(id);
+    const report = await this.expireIfOverdue(await this.findReport(id));
     this.assertCanView(report, userId, role);
     return { message: 'Lấy báo cáo tai nạn lao động thành công.', data: this.toDetail(report) };
   }
@@ -82,7 +112,8 @@ export class AccidentReportService implements OnModuleInit {
     if (role !== 'DOANH_NGHIEP') throw new ForbiddenException('Chỉ tài khoản doanh nghiệp mới được khai báo báo cáo.');
     const report = await this.findReport(id);
     if (report.enterprise.userId !== userId) throw new ForbiddenException('Bạn không có quyền cập nhật báo cáo này.');
-    if (report.status === AccidentReportStatus.ACCEPTED) throw new ConflictException('Báo cáo đã được tiếp nhận và không thể chỉnh sửa.');
+    await this.expireIfOverdue(report);
+    if ([AccidentReportStatus.ACCEPTED, AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED, AccidentReportStatus.EXPIRED].includes(report.status)) throw new ConflictException('Báo cáo đã khóa và chỉ được xem.');
 
     if (input.totalEmployees !== undefined) report.totalEmployees = input.totalEmployees;
     if (input.femaleEmployees !== undefined) report.femaleEmployees = input.femaleEmployees;
@@ -101,6 +132,7 @@ export class AccidentReportService implements OnModuleInit {
       const stored = await this.storeStampedPdf(stampedReport);
       if (report.stampedReportUrl) await this.removeStampedPdf(report.stampedReportUrl);
       report.stampedReportUrl = stored.url;
+      report.stampedReportFileId = randomUUID();
       report.stampedReportFileName = stampedReport.originalname;
       report.stampedReportContentType = stampedReport.mimetype;
       report.stampedReportSize = stampedReport.size;
@@ -115,7 +147,7 @@ export class AccidentReportService implements OnModuleInit {
   }
 
   async getReportSummary(id: string, userId: string, role: string) {
-    const report = await this.findReport(id);
+    const report = await this.expireIfOverdue(await this.findReport(id));
     this.assertCanView(report, userId, role);
     const accident = this.normalizeStats(this.toStoredData(report).accidentTotals as any);
     const subsidizedAccident = this.normalizeStats(this.toStoredData(report).subsidizedAccident as any);
@@ -135,36 +167,80 @@ export class AccidentReportService implements OnModuleInit {
 
   async getOverallSummary(year?: number) {
     const resolvedYear = await this.resolveYear(year);
-    const reports = await this.reports.find({
-      where: { year: resolvedYear, status: AccidentReportStatus.ACCEPTED },
-      relations: ['enterprise', 'enterprise.businessType', 'stats', 'detailLinks', 'detailLinks.accidentDetail'],
-      order: { createdAt: 'ASC' },
-    });
-    const allDetails = reports.reduce((result, report) => result.concat(this.toStoredData(report).accidentDetails || []), [] as any[]);
-    const [injuryTypes, injuryFactors, occupations] = await Promise.all([
-      this.groupDetails(allDetails, 'injuryTypeId'),
-      this.groupDetails(allDetails, 'injuryFactorId'),
-      this.groupDetails(allDetails, 'occupationId'),
+    const [acceptedReports, enterprises] = await Promise.all([
+      this.reports.find({
+        where: { year: resolvedYear, status: AccidentReportStatus.APPROVED },
+        relations: ['enterprise', 'enterprise.businessType', 'stats', 'detailLinks', 'detailLinks.accidentDetail'],
+        order: { createdAt: 'DESC' },
+      }),
+      this.enterprises.find({ relations: ['businessType'] }),
     ]);
-    const businessTypeMap = new Map<string, any>();
-    for (const report of reports) {
-      const type = report.enterprise.businessType;
-      if (!businessTypeMap.has(type.id)) businessTypeMap.set(type.id, { businessTypeId: type.id, name: type.name, code: type.code, ...zeroStats() });
-      Object.assign(businessTypeMap.get(type.id), this.sumStats([businessTypeMap.get(type.id), this.normalizeStats(this.toStoredData(report).accidentTotals as any)]));
+
+    // A business may have both a six-month and a full-year report. Count only one:
+    // prefer its accepted full-year report, otherwise use its accepted six-month report.
+    const preferredByEnterprise = new Map<string, AccidentReport>();
+    for (const report of acceptedReports) {
+      const existing = preferredByEnterprise.get(report.enterpriseId);
+      if (!existing || report.reportPeriod === AccidentReportPeriod.FULL_YEAR) preferredByEnterprise.set(report.enterpriseId, report);
     }
-    const accidentStats = reports.map((report) => this.normalizeStats(this.toStoredData(report).accidentTotals as any));
+    const reports = Array.from(preferredByEnterprise.values());
+    const byType = new Map<string, any>();
+    for (const enterprise of enterprises) {
+      const type = enterprise.businessType;
+      if (!byType.has(type.id)) byType.set(type.id, {
+        businessTypeId: type.id, name: type.name, code: type.code,
+        totalBusinesses: 0, reportedBusinesses: 0, totalEmployees: 0,
+        reportedEmployees: 0, femaleEmployees: 0, accidentFrequency: 0, fatalFrequency: 0,
+        ...zeroStats(),
+      });
+      byType.get(type.id).totalBusinesses += 1;
+    }
+    const reportDetails: any[] = [];
+    const total1: any = { ...zeroStats(), totalBusinesses: enterprises.length, reportedBusinesses: reports.length,
+      totalEmployees: 0, reportedEmployees: 0, femaleEmployees: 0, accidentFrequency: 0, fatalFrequency: 0 };
+
+    for (const report of reports) {
+      const data = this.toStoredData(report);
+      const typeStats = byType.get(report.enterprise.businessTypeId);
+      const stats = this.normalizeStats(data.accidentTotals as any);
+      Object.assign(typeStats, this.sumStats([typeStats, stats]));
+      Object.assign(total1, this.sumStats([total1, stats]));
+      const employees = numberValue(report.totalEmployees);
+      const femaleEmployees = numberValue(report.femaleEmployees);
+      typeStats.reportedBusinesses += 1;
+      typeStats.reportedEmployees += employees;
+      typeStats.totalEmployees += employees;
+      typeStats.femaleEmployees += femaleEmployees;
+      total1.reportedEmployees += employees;
+      total1.totalEmployees += employees;
+      total1.femaleEmployees += femaleEmployees;
+      reportDetails.push(...(data.accidentDetails || []));
+    }
+
+    const frequency = (victims: number, employees: number) => employees ? victims * 1000 / employees : 0;
+    for (const item of byType.values()) {
+      item.accidentFrequency = frequency(item.totalVictims, item.reportedEmployees);
+      item.fatalFrequency = frequency(item.totalFatalVictims, item.reportedEmployees);
+    }
+    total1.accidentFrequency = frequency(total1.totalVictims, total1.reportedEmployees);
+    total1.fatalFrequency = frequency(total1.totalFatalVictims, total1.reportedEmployees);
+
+    const [injuryTypes, injuryFactors, occupations] = await Promise.all([
+      this.groupDetails(reportDetails, 'injuryTypeId'),
+      this.groupDetails(reportDetails, 'injuryFactorId'),
+      this.groupDetails(reportDetails, 'occupationId'),
+    ]);
     return {
       message: 'Lấy báo cáo tổng hợp thành công.',
       data: {
         year: resolvedYear,
-        businessTypes: Array.from(businessTypeMap.values()),
-        total1: this.sumStats(accidentStats),
+        businessTypes: Array.from(byType.values()),
+        total1,
         injuryTypes, injuryFactors, occupations,
-        total2: this.sumStats(allDetails),
+        total2: this.sumStats(reportDetails),
       },
     };
   }
-
   async reportWord(id: string) {
     const report = await this.findReport(id);
     const summary = (await this.getReportSummary(id, report.enterprise.userId, 'DOANH_NGHIEP')).data;
@@ -283,14 +359,14 @@ export class AccidentReportService implements OnModuleInit {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, name: report.enterprise.name,
       taxCode: report.enterprise.taxCode, reportPeriod: report.reportPeriod, status: report.status,
-      year: report.year, createdAt: report.createdAt, updatedAt: report.updatedAt,
+      year: report.year, note: report.note || '', createdAt: report.createdAt, updatedAt: report.updatedAt,
     };
   }
 
   private toDetail(report: AccidentReport): AccidentReportDetailResponse {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, year: report.year,
-      reportPeriod: report.reportPeriod, status: report.status, companyName: report.enterprise.name,
+      reportPeriod: report.reportPeriod, status: report.status, note: report.note || '', companyName: report.enterprise.name,
       taxCode: report.enterprise.taxCode, businessTypeName: report.enterprise.businessType.name,
       businessIndustryName: report.enterprise.businessIndustry.name, totalEmployees: report.totalEmployees,
       femaleEmployees: report.femaleEmployees, totalSalaryFund: report.totalSalaryFund,
@@ -298,6 +374,7 @@ export class AccidentReportService implements OnModuleInit {
       accidentDetails: this.toStoredData(report).accidentDetails as unknown as AccidentDetailDto[] | null,
       subsidizedAccident: this.toStoredData(report).subsidizedAccident,
       stampedReport: report.stampedReportUrl ? {
+        fileId: report.stampedReportFileId,
         fileName: report.stampedReportFileName, contentType: report.stampedReportContentType,
         size: report.stampedReportSize, url: report.stampedReportUrl,
       } : null,

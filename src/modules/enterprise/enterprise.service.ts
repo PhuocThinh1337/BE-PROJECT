@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { AccidentReport, AccidentReportPeriod, AccidentReportStatus } from '../accident-report/accident-report.entity';
 import { Role } from '../role/role.entity';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { UserService } from '../user/user.service';
@@ -20,6 +21,7 @@ import { AuthService } from '../auth/auth.service';
 export class EnterpriseService {
   constructor(
     @InjectRepository(Enterprise) private readonly enterprises: Repository<Enterprise>,
+    @InjectRepository(AccidentReport) private readonly accidentReports: Repository<AccidentReport>,
     @InjectRepository(Role) private readonly roles: Repository<Role>,
     @InjectRepository(BusinessType) private readonly businessTypes: Repository<BusinessType>,
     @InjectRepository(BusinessIndustry) private readonly industries: Repository<BusinessIndustry>,
@@ -106,6 +108,11 @@ export class EnterpriseService {
       otherDocumentSize: storedOtherDocument?.size ?? null,
     });
     await this.enterprises.save(record);
+    const year = new Date().getFullYear();
+    await this.accidentReports.save([
+      this.accidentReports.create({ enterpriseId: record.id, year, reportPeriod: AccidentReportPeriod.SIX_MONTHS, status: AccidentReportStatus.PENDING }),
+      this.accidentReports.create({ enterpriseId: record.id, year, reportPeriod: AccidentReportPeriod.FULL_YEAR, status: AccidentReportStatus.PENDING }),
+    ]);
     return { message: 'Tạo doanh nghiệp thành công.', data: { ...created.data, enterpriseId: record.id } };
   }
 
