@@ -2,6 +2,11 @@ import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export const REPORT_FIELDS = ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails', 'subsidizedAccident'] as const;
+
+export interface ReportConfigYearsResponse {
+  years: number[];
+}
+
 export class UpdateReportPeriodConfigDto {
   @IsOptional() @IsBoolean() enabled?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) deadlineMonth?: number;

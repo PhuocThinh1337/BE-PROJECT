@@ -13,7 +13,7 @@ import { AccidentReportDetail } from './accident-report-detail.entity';
 import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 import { ReportPeriodConfig } from './report-period-config.entity';
-import { CreateAccidentCategoryDto, REPORT_FIELDS, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
+import { CreateAccidentCategoryDto, REPORT_FIELDS, ReportConfigYearsResponse, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 const victimFields = [
   'totalCases', 'fatalCases', 'totalCasesWithTwoOrMoreVictims', 'totalVictims', 'nonManagedVictims',
@@ -58,6 +58,15 @@ export class AccidentReportService implements OnModuleInit {
     await this.ensurePeriodConfigs();
     const data = await this.periodConfigs.find({ order: { period: 'ASC' } });
     return { data, availableFields: REPORT_FIELDS };
+  }
+
+  async listReportConfigYears(): Promise<ReportConfigYearsResponse> {
+    const rows = await this.reports.createQueryBuilder('report')
+      .select('report.year', 'year')
+      .distinct(true)
+      .orderBy('report.year', 'DESC')
+      .getRawMany();
+    return { years: rows.map((row) => Number(row.year)) };
   }
 
   async updatePeriodConfig(period: AccidentReportPeriod, input: UpdateReportPeriodConfigDto) {

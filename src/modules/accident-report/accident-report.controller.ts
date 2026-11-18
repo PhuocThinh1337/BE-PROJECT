@@ -17,6 +17,15 @@ interface ReportPdfFile { originalname: string; mimetype: string; size: number; 
 export class AccidentReportController {
   constructor(private readonly service: AccidentReportService) {}
 
+  @Get('report-configs/years')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy danh sách năm đã có cấu hình báo cáo' })
+  reportConfigYears(@Req() request: any) {
+    if (!['SO', 'DOANH_NGHIEP'].includes(request.user.role)) throw new ForbiddenException();
+    return this.service.listReportConfigYears();
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Lấy danh mục loại chấn thương, yếu tố chấn thương hoặc nghề nghiệp' })
   categories(@Query() query: ListAccidentCategoriesDto) {
