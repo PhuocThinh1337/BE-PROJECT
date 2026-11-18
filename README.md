@@ -48,10 +48,12 @@ Swagger docs: `http://localhost:3001/api/v1/api-docs`.
 - The BE creates `SIX_MONTHS` and `FULL_YEAR` report records for each enterprise for the current year. Missing records for a requested year are created when the report list is requested.
 - `GET /accident-reports` lists all enterprises' reports for the SO role. `GET /accident-reports/me` lists only the signed-in enterprise's reports. Both accept `page`, `size`, `name`, `taxCode`, `reportPeriod`, `status`, `province`, `ward`, and `year`; when `year` is omitted the newest report year is used.
 - `GET /accident-reports/:id` returns report details. SO can view all reports; DOANH_NGHIEP can view only its own.
-- `PUT /accident-reports/:id` saves report progress as `IN_PROGRESS`. Include a `stampedReport` PDF to submit it and move it to `ACCEPTED`. Accepted reports cannot be edited.
+- `PUT /accident-reports/:id` saves report progress as `IN_PROGRESS`. Include a `stampedReport` PDF to submit it and move it to `ACCEPTED`. Accepted reports cannot be edited. Declined reports can be corrected and resubmitted.
 - `GET /accident-reports/:id/summary` returns the per-report aggregates. `GET /accident-reports/summary?year=` returns totals for accepted reports only. SO can export individual reports with `GET /accident-reports/:id/export` and the annual aggregate with `GET /accident-reports/summary/export?year=` (Word-compatible `.doc`).
 - `GET /categories?type=INJURY_FACTOR|INJURY_TYPE|OCCUPATION` returns active reporting categories.
+- Reporting configuration: authenticated `GET /report-configurations` returns period deadlines, enabled state, required fields, and the supported field keys. SO can update a period with `PUT /report-configurations/SIX_MONTHS` or `PUT /report-configurations/FULL_YEAR`; body properties are `enabled`, `deadlineMonth`, `deadlineDay`, `requiredFields`, and `description`; statutory periods cannot be disabled. SO can add categories with `POST /categories/:type` and edit/deactivate them with `PATCH /categories/:id`.
 - Apply migration `CreateAccidentReports1810000000000` before starting the report module with schema synchronization disabled.
+- Apply migration `CreateReportConfiguration1850000000000` to create default six-month (July 5) and full-year (January 10) settings. Required fields are configurable from the existing report fields; adding entirely new data fields still requires a code and database change. Apply `AddAccidentReportAudit1860000000000` to record submission and review metadata.
 
 Refresh tokens are stored only as hashes in the `auth_sessions` table. Access tokens expire after 15 minutes. Logout and password changes revoke the corresponding database sessions, so protected requests reject those tokens immediately.
 

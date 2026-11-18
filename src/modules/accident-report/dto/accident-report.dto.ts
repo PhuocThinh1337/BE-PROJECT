@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
-import { Transform, Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsIn, IsInt, IsNumber, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { plainToClass, Transform, Type } from 'class-transformer';
+import { ArrayNotEmpty, IsArray, IsEnum, IsIn, IsInt, IsNumber, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { AccidentCategoryType } from '../accident-category.entity';
 import { AccidentReportPeriod, AccidentReportStatus } from '../accident-report.entity';
 
@@ -50,14 +50,28 @@ export class AccidentDetailDto extends AccidentVictimCountsDto {
   @IsOptional() @Transform(emptyToNull) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) propertyDamageExpense?: number | null;
 }
 
+const parseStatsJson = ({ value }: { value: unknown }) => {
+  const parsed = parseJson({ value });
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? plainToClass(AccidentStatsDto, parsed)
+    : parsed;
+};
+
+const parseDetailsJson = ({ value }: { value: unknown }) => {
+  const parsed = parseJson({ value });
+  return Array.isArray(parsed)
+    ? parsed.map((item) => plainToClass(AccidentDetailDto, item))
+    : parsed;
+};
+
 export class UpdateAccidentReportDto {
   @IsOptional() @Transform(emptyToNull) @Type(() => Number) @IsInt() @Min(0) totalEmployees?: number | null;
   @IsOptional() @Transform(emptyToNull) @Type(() => Number) @IsInt() @Min(0) femaleEmployees?: number | null;
   @IsOptional() @Transform(emptyToNull) @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) totalSalaryFund?: number | null;
 
-  @IsOptional() @Transform(parseJson) @ValidateNested() @Type(() => AccidentStatsDto) accidentTotals?: AccidentStatsDto | null;
-  @IsOptional() @Transform(parseJson) @ValidateNested({ each: true }) @Type(() => AccidentDetailDto) @IsArray() accidentDetails?: AccidentDetailDto[] | null;
-  @IsOptional() @Transform(parseJson) @ValidateNested() @Type(() => AccidentStatsDto) subsidizedAccident?: AccidentStatsDto | null;
+  @IsOptional() @Transform(parseStatsJson) @ValidateNested() @Type(() => AccidentStatsDto) accidentTotals?: AccidentStatsDto | null;
+  @IsOptional() @Transform(parseDetailsJson) @ValidateNested({ each: true }) @Type(() => AccidentDetailDto) @IsArray() accidentDetails?: AccidentDetailDto[] | null;
+  @IsOptional() @Transform(parseStatsJson) @ValidateNested() @Type(() => AccidentStatsDto) subsidizedAccident?: AccidentStatsDto | null;
 }
 
 export class ReviewAccidentReportsDto {

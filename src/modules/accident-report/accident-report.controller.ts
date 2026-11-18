@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Put, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -7,6 +7,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccidentCategoryType } from './accident-category.entity';
 import { AccidentReportService } from './accident-report.service';
 import { ListAccidentCategoriesDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { AccidentReportPeriod } from './accident-report.entity';
+import { CreateAccidentCategoryDto, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 interface ReportPdfFile { originalname: string; mimetype: string; size: number; buffer: Buffer; }
 
@@ -19,6 +21,44 @@ export class AccidentReportController {
   @ApiOperation({ summary: 'Lấy danh mục loại chấn thương, yếu tố chấn thương hoặc nghề nghiệp' })
   categories(@Query() query: ListAccidentCategoriesDto) {
     return this.service.getCategories(query.type);
+  }
+
+  @Get('report-configurations')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy cấu hình kỳ, hạn nộp và trường bắt buộc của báo cáo' })
+  reportConfigurations(@Req() request: any) {
+    if (!['SO', 'DOANH_NGHIEP'].includes(request.user.role)) throw new ForbiddenException();
+    return this.service.listPeriodConfigs();
+  }
+
+  @Put('report-configurations/:period')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sở cập nhật cấu hình kỳ báo cáo' })
+  updateReportConfiguration(@Req() request: any, @Param('period') period: AccidentReportPeriod, @Body() body: UpdateReportPeriodConfigDto) {
+    this.assertSo(request.user.role);
+    if (!Object.values(AccidentReportPeriod).includes(period)) throw new BadRequestException('Kỳ báo cáo không hợp lệ.');
+    return this.service.updatePeriodConfig(period, body);
+  }
+
+  @Post('categories/:type')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sở thêm một mục danh mục báo cáo' })
+  createCategory(@Req() request: any, @Param('type') type: AccidentCategoryType, @Body() body: CreateAccidentCategoryDto) {
+    this.assertSo(request.user.role);
+    if (!Object.values(AccidentCategoryType).includes(type)) throw new BadRequestException('Nhóm danh mục không hợp lệ.');
+    return this.service.createCategory(type, body);
+  }
+
+  @Patch('categories/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sở cập nhật hoặc ngừng sử dụng một mục danh mục báo cáo' })
+  updateCategory(@Req() request: any, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: UpdateAccidentCategoryDto) {
+    this.assertSo(request.user.role);
+    return this.service.updateCategory(id, body);
   }
 
   @Get('accident-reports/summary/export')
@@ -95,7 +135,7 @@ export class AccidentReportController {
   @ApiOperation({ summary: 'Sở duyệt hoặc từ chối các báo cáo đã nộp' })
   review(@Req() request: any, @Body() body: ReviewAccidentReportsDto) {
     this.assertSo(request.user.role);
-    return this.service.reviewReports(body);
+    return this.service.reviewReports(body, request.user.id);
   }
 
   @Put('accident-reports/:id')

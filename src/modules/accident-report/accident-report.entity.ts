@@ -30,6 +30,9 @@ export class AccidentReport {
   @Column({ length: 20 }) reportPeriod: AccidentReportPeriod;
   @Column({ length: 20, default: AccidentReportStatus.PENDING }) status: AccidentReportStatus;
   @Column({ type: 'text', nullable: true }) note: string | null;
+  @Column({ type: 'timestamptz', nullable: true }) submittedAt: Date | null;
+  @Column({ type: 'timestamptz', nullable: true }) reviewedAt: Date | null;
+  @Column({ type: 'uuid', nullable: true }) reviewedByUserId: string | null;
 
   @Column({ type: 'int', nullable: true }) totalEmployees: number | null;
   @Column({ type: 'int', nullable: true }) femaleEmployees: number | null;

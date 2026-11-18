@@ -31,6 +31,9 @@ import { AccidentReportDetail } from './modules/accident-report/accident-report-
 import { NormalizeAccidentReportTables1820000000000 } from './database/migrations/1820000000000-NormalizeAccidentReportTables';
 import { AddAccidentStampedFileId1830000000000 } from './database/migrations/1830000000000-AddAccidentStampedFileId';
 import { AddAccidentReportReview1840000000000 } from './database/migrations/1840000000000-AddAccidentReportReview';
+import { CreateReportConfiguration1850000000000 } from './database/migrations/1850000000000-CreateReportConfiguration';
+import { AddAccidentReportAudit1860000000000 } from './database/migrations/1860000000000-AddAccidentReportAudit';
+import { ReportPeriodConfig } from './modules/accident-report/report-period-config.entity';
 import { AccidentReportModule } from './modules/accident-report/accident-report.module';
 
 @Module({
@@ -43,7 +46,7 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
       username: process.env.VNA_DB_USER,
       password: process.env.VNA_DB_PASSWORD,
       database: process.env.VNA_DB_DATABASE,
-      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry, AccidentReport, AccidentCategory, AccidentStats, AccidentDetail, AccidentReportDetail],
+      entities: [User, Role, AuthSession, EmailChangeRequest, EmailOtp, Enterprise, BusinessType, BusinessIndustry, AccidentReport, AccidentCategory, AccidentStats, AccidentDetail, AccidentReportDetail, ReportPeriodConfig],
       migrations: [
         CreateAuthSessions1700000000000,
         AddUserProfileAndEmailChangeRequests1710000000000,
@@ -60,6 +63,8 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
         NormalizeAccidentReportTables1820000000000,
         AddAccidentStampedFileId1830000000000,
         AddAccidentReportReview1840000000000,
+        CreateReportConfiguration1850000000000,
+        AddAccidentReportAudit1860000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

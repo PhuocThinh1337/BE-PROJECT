@@ -55,16 +55,19 @@ async function bootstrap() {
     forbidUnknownValues: true,
     exceptionFactory: (errors) => {
       const messages: string[] = [];
-      errors.forEach((error) => {
+      const collect = (items: any[], prefix = '') => items.forEach((error) => {
+        const property = prefix ? `${prefix}.${error.property}` : error.property;
         const constraints = error.constraints || {};
         Object.keys(constraints).forEach((constraint) => {
           messages.push(
             constraint === 'whitelistValidation'
-              ? `Trường "${error.property}" không được hỗ trợ.`
-              : translateValidationMessage(error.property, constraint, constraints[constraint]),
+              ? `Trường "${property}" không được hỗ trợ.`
+              : `${property}: ${translateValidationMessage(error.property, constraint, constraints[constraint])}`,
           );
         });
+        if (error.children?.length) collect(error.children, property);
       });
+      collect(errors);
       return new BadRequestException({
         statusCode: 400,
         message: messages.length ? messages : ['Dữ liệu gửi lên không hợp lệ.'],

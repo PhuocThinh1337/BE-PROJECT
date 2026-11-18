@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, SelectQueryBuilder } from 'typeorm';
+import { EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { mkdir, unlink, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
@@ -12,6 +12,8 @@ import { AccidentDetail } from './accident-detail.entity';
 import { AccidentReportDetail } from './accident-report-detail.entity';
 import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
+import { ReportPeriodConfig } from './report-period-config.entity';
+import { CreateAccidentCategoryDto, REPORT_FIELDS, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 const victimFields = [
   'totalCases', 'fatalCases', 'totalCasesWithTwoOrMoreVictims', 'totalVictims', 'nonManagedVictims',
@@ -35,54 +37,128 @@ export class AccidentReportService implements OnModuleInit {
     @InjectRepository(AccidentStats) private readonly stats: Repository<AccidentStats>,
     @InjectRepository(AccidentDetail) private readonly details: Repository<AccidentDetail>,
     @InjectRepository(AccidentReportDetail) private readonly detailLinks: Repository<AccidentReportDetail>,
+    @InjectRepository(ReportPeriodConfig) private readonly periodConfigs: Repository<ReportPeriodConfig>,
   ) {}
 
   async onModuleInit() {
+    await this.ensurePeriodConfigs();
     await this.ensureReportsForYear(new Date().getFullYear());
+  }
+
+  private async ensurePeriodConfigs() {
+    const defaults = [
+      { period: AccidentReportPeriod.SIX_MONTHS, deadlineMonth: 7, deadlineDay: 5, requiredFields: ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails'], description: 'Báo cáo 6 tháng' },
+      { period: AccidentReportPeriod.FULL_YEAR, deadlineMonth: 1, deadlineDay: 10, requiredFields: ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails'], description: 'Báo cáo cả năm' },
+    ];
+    for (const config of defaults) await this.periodConfigs.createQueryBuilder().insert().values(config as any)
+      .onConflict('("period") DO NOTHING').execute();
+  }
+
+  async listPeriodConfigs() {
+    await this.ensurePeriodConfigs();
+    const data = await this.periodConfigs.find({ order: { period: 'ASC' } });
+    return { data, availableFields: REPORT_FIELDS };
+  }
+
+  async updatePeriodConfig(period: AccidentReportPeriod, input: UpdateReportPeriodConfigDto) {
+    await this.ensurePeriodConfigs();
+    if (input.enabled === false) throw new BadRequestException('Không thể tắt kỳ báo cáo định kỳ bắt buộc.');
+    if (input.requiredFields && input.requiredFields.some((field) => !(REPORT_FIELDS as readonly string[]).includes(field))) {
+      throw new BadRequestException(`requiredFields chỉ nhận: ${REPORT_FIELDS.join(', ')}.`);
+    }
+    const config = await this.periodConfigs.findOne({ where: { period } });
+    Object.assign(config, input);
+    await this.periodConfigs.save(config);
+    return { data: config };
+  }
+
+  async createCategory(type: AccidentCategoryType, input: CreateAccidentCategoryDto) {
+    const code = input.code.trim().toUpperCase();
+    const name = input.name.trim();
+    if (!code || !name) throw new BadRequestException('Mã và tên danh mục không được để trống.');
+    const category = this.categories.create({ type, code, name, isActive: true });
+    try { await this.categories.save(category); } catch (error) {
+      if ((error as any).code === '23505') throw new ConflictException('Mã danh mục đã tồn tại trong nhóm này.');
+      throw error;
+    }
+    return { data: category };
+  }
+
+  async updateCategory(id: string, input: UpdateAccidentCategoryDto) {
+    const category = await this.categories.findOne({ where: { id } });
+    if (!category) throw new NotFoundException('Không tìm thấy danh mục.');
+    if (input.code !== undefined) category.code = input.code.trim().toUpperCase();
+    if (input.name !== undefined) category.name = input.name.trim();
+    if (input.isActive !== undefined) category.isActive = input.isActive;
+    try { await this.categories.save(category); } catch (error) {
+      if ((error as any).code === '23505') throw new ConflictException('Mã danh mục đã tồn tại trong nhóm này.');
+      throw error;
+    }
+    return { data: category };
   }
 
   async ensureReportsForYear(year: number) {
     const enterprises = await this.enterprises.find({ select: ['id'] });
     if (!enterprises.length) return;
+    await this.ensurePeriodConfigs();
+    const configs = await this.periodConfigs.find();
+    if (!configs.length) return;
     const values = enterprises.reduce((result, { id }) => result.concat(
-      [AccidentReportPeriod.SIX_MONTHS, AccidentReportPeriod.FULL_YEAR].map((reportPeriod) => ({
+      configs.map(({ period: reportPeriod }) => ({
         enterpriseId: id, year, reportPeriod, status: AccidentReportStatus.PENDING,
       })),
     ), [] as any[]);
     await this.reports.createQueryBuilder().insert().values(values as any)
       .onConflict('("enterpriseId", "year", "reportPeriod") DO NOTHING').execute();
     const now = new Date();
-    const statuses = [AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS, AccidentReportStatus.ACCEPTED];
-    if (now >= new Date(year, 6, 5)) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
-      .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: AccidentReportPeriod.SIX_MONTHS, statuses }).execute();
-    if (now >= new Date(year + 1, 0, 10)) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
-      .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: AccidentReportPeriod.FULL_YEAR, statuses }).execute();
+    const statuses = [AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS];
+    for (const config of configs) {
+      const deadlineYear = config.period === AccidentReportPeriod.FULL_YEAR && config.deadlineMonth <= 3 ? year + 1 : year;
+      const deadline = this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
+      if (now >= deadline) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
+        .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: config.period, statuses }).execute();
+    }
   }
 
-  private deadline(report: AccidentReport) {
-    return report.reportPeriod === AccidentReportPeriod.SIX_MONTHS
-      ? new Date(report.year, 6, 5, 0, 0, 0, 0)
-      : new Date(report.year + 1, 0, 10, 0, 0, 0, 0);
+  private makeDeadline(year: number, month: number, day: number) {
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, Math.min(day, lastDay), 0, 0, 0, 0);
+  }
+
+  private async deadline(report: AccidentReport) {
+    const config = await this.periodConfigs.findOne({ where: { period: report.reportPeriod } });
+    const month = config?.deadlineMonth || (report.reportPeriod === AccidentReportPeriod.SIX_MONTHS ? 7 : 1);
+    const day = config?.deadlineDay || (report.reportPeriod === AccidentReportPeriod.SIX_MONTHS ? 5 : 10);
+    const year = report.reportPeriod === AccidentReportPeriod.FULL_YEAR && month <= 3 ? report.year + 1 : report.year;
+    return this.makeDeadline(year, month, day);
   }
 
   private async expireIfOverdue(report: AccidentReport) {
-    if ([AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS, AccidentReportStatus.ACCEPTED].includes(report.status) && new Date() >= this.deadline(report)) {
+    if ([AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS].includes(report.status) && new Date() >= await this.deadline(report)) {
       report.status = AccidentReportStatus.EXPIRED;
       await this.reports.save(report);
     }
     return report;
   }
 
-  async reviewReports(input: ReviewAccidentReportsDto) {
-    const reports = await this.reports.find({ where: { id: In(input.accidentReportIds) } });
-    if (reports.length !== new Set(input.accidentReportIds).size) throw new NotFoundException('Không tìm thấy một hoặc nhiều báo cáo.');
-    for (const report of reports) await this.expireIfOverdue(report);
-    if (reports.some((report) => report.status !== AccidentReportStatus.ACCEPTED)) throw new ConflictException('Chỉ được duyệt hoặc từ chối báo cáo đang ở trạng thái ACCEPTED và chưa quá hạn.');
-    for (const report of reports) { report.status = input.status; report.note = input.note; }
-    await this.reports.save(reports);
-    return { message: 'Cập nhật trạng thái báo cáo thành công.', data: reports.map((report) => ({ accidentReportId: report.id, status: report.status, note: report.note })) };
+  async reviewReports(input: ReviewAccidentReportsDto, reviewerId: string) {
+    return this.reports.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(AccidentReport);
+      const reports = await repository.createQueryBuilder('report').setLock('pessimistic_write')
+        .where('report.id IN (:...ids)', { ids: input.accidentReportIds }).getMany();
+      if (reports.length !== new Set(input.accidentReportIds).size) throw new NotFoundException('Không tìm thấy một hoặc nhiều báo cáo.');
+      if (reports.some((report) => report.status !== AccidentReportStatus.ACCEPTED)) throw new ConflictException('Chỉ được duyệt hoặc từ chối báo cáo đã nộp và đang chờ xử lý.');
+      const reviewedAt = new Date();
+      for (const report of reports) {
+        report.status = input.status;
+        report.note = input.note;
+        report.reviewedAt = reviewedAt;
+        report.reviewedByUserId = reviewerId;
+      }
+      await repository.save(reports);
+      return { message: 'Cập nhật trạng thái báo cáo thành công.', data: reports.map((report) => ({ accidentReportId: report.id, status: report.status, note: report.note, reviewedAt: report.reviewedAt, reviewedByUserId: report.reviewedByUserId })) };
+    });
   }
-
   async listForDepartment(query: ListAccidentReportsDto) {
     const year = await this.resolveYear(query.year);
     const builder = this.baseListQuery().where('report.year = :year', { year });
@@ -113,7 +189,7 @@ export class AccidentReportService implements OnModuleInit {
     const report = await this.findReport(id);
     if (report.enterprise.userId !== userId) throw new ForbiddenException('Bạn không có quyền cập nhật báo cáo này.');
     await this.expireIfOverdue(report);
-    if ([AccidentReportStatus.ACCEPTED, AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED, AccidentReportStatus.EXPIRED].includes(report.status)) throw new ConflictException('Báo cáo đã khóa và chỉ được xem.');
+    if ([AccidentReportStatus.ACCEPTED, AccidentReportStatus.APPROVED, AccidentReportStatus.EXPIRED].includes(report.status)) throw new ConflictException('Báo cáo đã khóa và chỉ được xem.');
 
     if (input.totalEmployees !== undefined) report.totalEmployees = input.totalEmployees;
     if (input.femaleEmployees !== undefined) report.femaleEmployees = input.femaleEmployees;
@@ -124,24 +200,39 @@ export class AccidentReportService implements OnModuleInit {
     if (input.subsidizedAccident !== undefined) stored.subsidizedAccident = input.subsidizedAccident === null ? null : this.normalizeStats(input.subsidizedAccident);
     const reportData = { ...report, ...stored } as any;
 
-    this.validateReportData(report);
+    this.validateReportData(reportData);
     await this.validateDetailCategories(stored.accidentDetails);
+    let uploadedFileUrl: string | null = null;
+    const previousFileUrl = report.stampedReportUrl;
     if (stampedReport) {
       this.validateStampedPdf(stampedReport);
-      this.validateReportComplete(reportData);
-      const stored = await this.storeStampedPdf(stampedReport);
-      if (report.stampedReportUrl) await this.removeStampedPdf(report.stampedReportUrl);
-      report.stampedReportUrl = stored.url;
+      await this.validateReportComplete(reportData, report.reportPeriod);
+      const storedFile = await this.storeStampedPdf(stampedReport);
+      uploadedFileUrl = storedFile.url;
+      report.stampedReportUrl = storedFile.url;
       report.stampedReportFileId = randomUUID();
       report.stampedReportFileName = stampedReport.originalname;
       report.stampedReportContentType = stampedReport.mimetype;
       report.stampedReportSize = stampedReport.size;
       report.status = AccidentReportStatus.ACCEPTED;
+      report.submittedAt = new Date();
+      report.reviewedAt = null;
+      report.reviewedByUserId = null;
     } else {
       report.status = AccidentReportStatus.IN_PROGRESS;
     }
-    const saved = await this.reports.save(report);
-    await this.persistNormalizedData(report.id, stored, input);
+    let saved: AccidentReport;
+    try {
+      saved = await this.reports.manager.transaction(async (manager) => {
+        const result = await manager.getRepository(AccidentReport).save(report);
+        await this.persistNormalizedData(report.id, stored, input, manager);
+        return result;
+      });
+    } catch (error) {
+      if (uploadedFileUrl) await this.removeStampedPdf(uploadedFileUrl);
+      throw error;
+    }
+    if (previousFileUrl && uploadedFileUrl) await this.removeStampedPdf(previousFileUrl);
     const reloaded = await this.findReport(saved.id);
     return { message: stampedReport ? 'Gửi báo cáo thành công.' : 'Lưu tiến độ báo cáo thành công.', data: this.toDetail(reloaded) };
   }
@@ -333,20 +424,23 @@ export class AccidentReportService implements OnModuleInit {
     };
   }
 
-  private async persistNormalizedData(reportId: string, data: any, input: UpdateAccidentReportDto) {
+  private async persistNormalizedData(reportId: string, data: any, input: UpdateAccidentReportDto, manager: EntityManager) {
+    const statsRepository = manager.getRepository(AccidentStats);
+    const detailsRepository = manager.getRepository(AccidentDetail);
+    const linksRepository = manager.getRepository(AccidentReportDetail);
     for (const item of [{ value: input.accidentTotals, subsidized: false }, { value: input.subsidizedAccident, subsidized: true }]) {
       if (item.value === undefined) continue;
-      await this.stats.delete({ accidentReportId: reportId, isSubsidizedAccident: item.subsidized });
-      if (item.value !== null) await this.stats.save(this.stats.create({ ...this.normalizeStats(item.value), accidentReportId: reportId, isSubsidizedAccident: item.subsidized }));
+      await statsRepository.delete({ accidentReportId: reportId, isSubsidizedAccident: item.subsidized });
+      if (item.value !== null) await statsRepository.save(statsRepository.create({ ...this.normalizeStats(item.value), accidentReportId: reportId, isSubsidizedAccident: item.subsidized }));
     }
     if (input.accidentDetails !== undefined) {
-      const links = await this.detailLinks.find({ where: { accidentReportId: reportId } });
+      const links = await linksRepository.find({ where: { accidentReportId: reportId } });
       const ids = links.map((link) => link.accidentDetailId);
-      if (links.length) await this.detailLinks.remove(links);
-      if (ids.length) await this.details.delete(ids);
+      if (links.length) await linksRepository.remove(links);
+      if (ids.length) await detailsRepository.delete(ids);
       if (input.accidentDetails) for (const item of data.accidentDetails) {
-        const detail = await this.details.save(this.details.create(item as any) as unknown as AccidentDetail);
-        await this.detailLinks.save(this.detailLinks.create({ accidentReportId: reportId, accidentDetailId: detail.id }));
+        const detail = await detailsRepository.save(detailsRepository.create(item as any) as unknown as AccidentDetail);
+        await linksRepository.save(linksRepository.create({ accidentReportId: reportId, accidentDetailId: detail.id }));
       }
     }
   }
@@ -359,14 +453,16 @@ export class AccidentReportService implements OnModuleInit {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, name: report.enterprise.name,
       taxCode: report.enterprise.taxCode, reportPeriod: report.reportPeriod, status: report.status,
-      year: report.year, note: report.note || '', createdAt: report.createdAt, updatedAt: report.updatedAt,
+      year: report.year, note: report.note || '', submittedAt: report.submittedAt, reviewedAt: report.reviewedAt,
+      reviewedByUserId: report.reviewedByUserId, createdAt: report.createdAt, updatedAt: report.updatedAt,
     };
   }
 
   private toDetail(report: AccidentReport): AccidentReportDetailResponse {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, year: report.year,
-      reportPeriod: report.reportPeriod, status: report.status, note: report.note || '', companyName: report.enterprise.name,
+      reportPeriod: report.reportPeriod, status: report.status, note: report.note || '', submittedAt: report.submittedAt,
+      reviewedAt: report.reviewedAt, reviewedByUserId: report.reviewedByUserId, companyName: report.enterprise.name,
       taxCode: report.enterprise.taxCode, businessTypeName: report.enterprise.businessType.name,
       businessIndustryName: report.enterprise.businessIndustry.name, totalEmployees: report.totalEmployees,
       femaleEmployees: report.femaleEmployees, totalSalaryFund: report.totalSalaryFund,
@@ -400,7 +496,10 @@ export class AccidentReportService implements OnModuleInit {
     }
     this.validateStats((report as any).accidentTotals, 'Tai nạn lao động');
     this.validateStats((report as any).subsidizedAccident, 'Tai nạn được hưởng trợ cấp');
-    for (const item of this.toStoredData(report).accidentDetails || []) this.validateStats(item as any, 'Chi tiết tai nạn');
+    const accidentDetails = (report as any).accidentDetails !== undefined
+      ? (report as any).accidentDetails
+      : this.toStoredData(report).accidentDetails;
+    for (const item of accidentDetails || []) this.validateStats(item as any, 'Chi tiết tai nạn');
   }
 
   private validateStats(stats: any, label: string) {
@@ -410,11 +509,9 @@ export class AccidentReportService implements OnModuleInit {
       throw new BadRequestException(`${label}: số vụ có người chết hoặc từ hai người bị nạn không được vượt quá tổng số vụ.`);
     }
     const victims = value('totalVictims');
-    const victimBreakdown = value('totalFemaleVictims') + value('totalFatalVictims') + value('totalSeverelyInjuredVictims');
-    if (victimBreakdown > victims) throw new BadRequestException(`${label}: tổng lao động nữ, người chết và người bị thương nặng không được vượt quá tổng số người bị nạn.`);
     const nonManaged = value('nonManagedVictims');
-    const nonManagedBreakdown = value('nonManagedFemaleVictims') + value('nonManagedFatalVictims') + value('nonManagedSeverelyInjuredVictims');
-    if (nonManaged > victims || nonManagedBreakdown > nonManaged ||
+    if (value('totalFemaleVictims') > victims || value('totalFatalVictims') > victims || value('totalSeverelyInjuredVictims') > victims ||
+      nonManaged > victims || value('nonManagedFemaleVictims') > nonManaged || value('nonManagedFatalVictims') > nonManaged || value('nonManagedSeverelyInjuredVictims') > nonManaged ||
       value('nonManagedFemaleVictims') > value('totalFemaleVictims') ||
       value('nonManagedFatalVictims') > value('totalFatalVictims') ||
       value('nonManagedSeverelyInjuredVictims') > value('totalSeverelyInjuredVictims')) {
@@ -422,11 +519,11 @@ export class AccidentReportService implements OnModuleInit {
     }
   }
 
-  private validateReportComplete(report: AccidentReport) {
-    if (report.totalEmployees === null || report.femaleEmployees === null || report.totalSalaryFund === null ||
-      !(report as any).accidentTotals || (report as any).accidentDetails === null) {
-      throw new BadRequestException('Vui lòng hoàn tất thông tin doanh nghiệp và số liệu tai nạn trước khi gửi báo cáo.');
-    }
+  private async validateReportComplete(report: AccidentReport, period: AccidentReportPeriod) {
+    const config = await this.periodConfigs.findOne({ where: { period } });
+    const requiredFields = config?.requiredFields || ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails'];
+    const missing = requiredFields.filter((field) => (report as any)[field] === null || (report as any)[field] === undefined);
+    if (missing.length) throw new BadRequestException(`Vui lòng nhập các trường bắt buộc: ${missing.join(', ')}.`);
   }
 
   private async validateDetailCategories(details: Record<string, unknown>[] | null) {
