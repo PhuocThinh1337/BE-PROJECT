@@ -60,13 +60,13 @@ export class AccidentReportService implements OnModuleInit {
     return { data, availableFields: REPORT_FIELDS };
   }
 
-  async listReportConfigYears(): Promise<ReportConfigYearsResponse> {
+  async listReportConfigYears(): Promise<{ success: true; data: ReportConfigYearsResponse }> {
     const rows = await this.reports.createQueryBuilder('report')
       .select('report.year', 'year')
       .distinct(true)
       .orderBy('report.year', 'DESC')
       .getRawMany();
-    return { years: rows.map((row) => Number(row.year)) };
+    return { success: true, data: { years: rows.map((row) => Number(row.year)) } };
   }
 
   async updatePeriodConfig(period: AccidentReportPeriod, input: UpdateReportPeriodConfigDto) {
