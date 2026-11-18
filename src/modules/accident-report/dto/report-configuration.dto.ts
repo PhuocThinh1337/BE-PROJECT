@@ -3,9 +3,7 @@ import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, MaxLength, Min } 
 
 export const REPORT_FIELDS = ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails', 'subsidizedAccident'] as const;
 
-export interface ReportConfigYearsResponse {
-  years: number[];
-}
+export type ReportConfigYearsResponse = number[];
 
 export class UpdateReportPeriodConfigDto {
   @IsOptional() @IsBoolean() enabled?: boolean;

@@ -66,7 +66,7 @@ export class AccidentReportService implements OnModuleInit {
       .distinct(true)
       .orderBy('report.year', 'DESC')
       .getRawMany();
-    return { success: true, data: { years: rows.map((row) => Number(row.year)) } };
+    return { success: true, data: rows.map((row) => Number(row.year)) };
   }
 
   async updatePeriodConfig(period: AccidentReportPeriod, input: UpdateReportPeriodConfigDto) {
