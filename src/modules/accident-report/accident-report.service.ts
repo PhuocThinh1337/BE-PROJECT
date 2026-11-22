@@ -67,7 +67,8 @@ export class AccidentReportService implements OnModuleInit {
     return { success: true, data };
   }
 
-  async extendReportDeadline(period: AccidentReportPeriod, input: ExtendReportDeadlineDto) {
+  async extendReportDeadline(input: ExtendReportDeadlineDto) {
+    const period = input.period;
     await this.ensureReportsForYear(input.year);
     const config = await this.periodConfigs.findOne({ where: { period } });
     if (!config) throw new NotFoundException('Không tìm thấy cấu hình kỳ báo cáo.');

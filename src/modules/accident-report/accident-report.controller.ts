@@ -41,7 +41,7 @@ export class AccidentReportController {
     return this.service.listPeriodConfigs();
   }
 
-  @Get('report-configurations/extensions')
+  @Get('report-configs/extensions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Xem các kỳ đã được gia hạn trong năm' })
@@ -50,14 +50,13 @@ export class AccidentReportController {
     return this.service.listDeadlineExtensions(query);
   }
 
-  @Post('report-configurations/:period/extend')
+  @Post('report-configs/extend')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Gia hạn kỳ nộp nếu hết hạn nhưng còn doanh nghiệp chưa nộp' })
-  extendReportDeadline(@Req() request: any, @Param('period') period: AccidentReportPeriod, @Body() body: ExtendReportDeadlineDto) {
+  extendReportDeadline(@Req() request: any, @Body() body: ExtendReportDeadlineDto) {
     this.assertSo(request.user.role);
-    if (!Object.values(AccidentReportPeriod).includes(period)) throw new BadRequestException('Kỳ báo cáo không hợp lệ.');
-    return this.service.extendReportDeadline(period, body);
+    return this.service.extendReportDeadline(body);
   }
 
   @Put('report-configurations/:period')
