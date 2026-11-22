@@ -92,6 +92,10 @@ export class ListAccidentReportsDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(2000) @Max(new Date().getFullYear() + 20) year?: number;
 }
 
+export class ListMyAccidentReportsDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(2000) @Max(new Date().getFullYear() + 20) year?: number;
+}
+
 export class ListAccidentCategoriesDto {
   @IsEnum(AccidentCategoryType) type: AccidentCategoryType;
 }

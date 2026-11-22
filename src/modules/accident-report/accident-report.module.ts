@@ -10,9 +10,10 @@ import { AccidentReportDetail } from './accident-report-detail.entity';
 import { AccidentReportController } from './accident-report.controller';
 import { AccidentReportService } from './accident-report.service';
 import { ReportPeriodConfig } from './report-period-config.entity';
+import { ReportPeriodDeadline } from './report-period-deadline.entity';
 
 @Module({
-  imports: [AuthModule, TypeOrmModule.forFeature([AccidentReport, AccidentCategory, AccidentStats, AccidentDetail, AccidentReportDetail, ReportPeriodConfig, Enterprise])],
+  imports: [AuthModule, TypeOrmModule.forFeature([AccidentReport, AccidentCategory, AccidentStats, AccidentDetail, AccidentReportDetail, ReportPeriodConfig, ReportPeriodDeadline, Enterprise])],
   controllers: [AccidentReportController],
   providers: [AccidentReportService],
 })

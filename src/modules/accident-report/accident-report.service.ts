@@ -10,10 +10,11 @@ import { AccidentReport, AccidentReportPeriod, AccidentReportStatus } from './ac
 import { AccidentStats } from './accident-stats.entity';
 import { AccidentDetail } from './accident-detail.entity';
 import { AccidentReportDetail } from './accident-report-detail.entity';
-import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ListMyAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 import { ReportPeriodConfig } from './report-period-config.entity';
-import { CreateAccidentCategoryDto, REPORT_FIELDS, ReportConfigYearsResponse, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
+import { ReportPeriodDeadline } from './report-period-deadline.entity';
+import { CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, REPORT_FIELDS, ReportConfigYearsResponse, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 const victimFields = [
   'totalCases', 'fatalCases', 'totalCasesWithTwoOrMoreVictims', 'totalVictims', 'nonManagedVictims',
@@ -38,6 +39,7 @@ export class AccidentReportService implements OnModuleInit {
     @InjectRepository(AccidentDetail) private readonly details: Repository<AccidentDetail>,
     @InjectRepository(AccidentReportDetail) private readonly detailLinks: Repository<AccidentReportDetail>,
     @InjectRepository(ReportPeriodConfig) private readonly periodConfigs: Repository<ReportPeriodConfig>,
+    @InjectRepository(ReportPeriodDeadline) private readonly periodDeadlines: Repository<ReportPeriodDeadline>,
   ) {}
 
   async onModuleInit() {
@@ -58,6 +60,52 @@ export class AccidentReportService implements OnModuleInit {
     await this.ensurePeriodConfigs();
     const data = await this.periodConfigs.find({ order: { period: 'ASC' } });
     return { data, availableFields: REPORT_FIELDS };
+  }
+
+  async listDeadlineExtensions(query: ListReportDeadlineExtensionsDto) {
+    const data = await this.periodDeadlines.find({ where: { year: query.year }, order: { period: 'ASC' } });
+    return { success: true, data };
+  }
+
+  async extendReportDeadline(period: AccidentReportPeriod, input: ExtendReportDeadlineDto) {
+    await this.ensureReportsForYear(input.year);
+    const config = await this.periodConfigs.findOne({ where: { period } });
+    if (!config) throw new NotFoundException('Không tìm thấy cấu hình kỳ báo cáo.');
+
+    const extension = await this.periodDeadlines.findOne({ where: { year: input.year, period } });
+    const deadlineYear = period === AccidentReportPeriod.FULL_YEAR && config.deadlineMonth <= 3 ? input.year + 1 : input.year;
+    const currentDeadline = extension?.deadlineAt || this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
+    const now = new Date();
+    if (now < currentDeadline) throw new ConflictException('Chỉ được gia hạn sau khi đã hết hạn nộp báo cáo.');
+
+    const totalReports = await this.reports.count({ where: { year: input.year, reportPeriod: period } });
+    const submittedStatuses = [AccidentReportStatus.ACCEPTED, AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED];
+    const submittedReports = await this.reports.createQueryBuilder('report')
+      .where('report.year = :year AND report.reportPeriod = :period', { year: input.year, period })
+      .andWhere('report.status IN (:...statuses)', { statuses: submittedStatuses })
+      .getCount();
+    if (totalReports === 0 || submittedReports >= totalReports) {
+      throw new ConflictException('Không thể gia hạn vì số báo cáo đã nộp đã đạt yêu cầu.');
+    }
+
+    const deadlineAt = new Date(now.getTime() + input.additionalDays * 24 * 60 * 60 * 1000);
+    const savedExtension = await this.periodDeadlines.save(this.periodDeadlines.create({
+      ...(extension || {}), year: input.year, period, deadlineAt,
+    }));
+    await this.reports.update(
+      { year: input.year, reportPeriod: period, status: AccidentReportStatus.EXPIRED },
+      { status: AccidentReportStatus.PENDING },
+    );
+    return {
+      success: true,
+      data: {
+        ...savedExtension,
+        message: `Đã gia hạn thêm ${input.additionalDays} ngày vì vẫn còn doanh nghiệp chưa nộp báo cáo.`,
+        totalReports,
+        submittedReports,
+        remainingReports: totalReports - submittedReports,
+      },
+    };
   }
 
   async listReportConfigYears(): Promise<{ success: true; data: ReportConfigYearsResponse }> {
@@ -123,7 +171,8 @@ export class AccidentReportService implements OnModuleInit {
     const statuses = [AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS];
     for (const config of configs) {
       const deadlineYear = config.period === AccidentReportPeriod.FULL_YEAR && config.deadlineMonth <= 3 ? year + 1 : year;
-      const deadline = this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
+      const extension = await this.periodDeadlines.findOne({ where: { year, period: config.period } });
+      const deadline = extension?.deadlineAt || this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
       if (now >= deadline) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
         .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: config.period, statuses }).execute();
     }
@@ -135,6 +184,8 @@ export class AccidentReportService implements OnModuleInit {
   }
 
   private async deadline(report: AccidentReport) {
+    const extension = await this.periodDeadlines.findOne({ where: { year: report.year, period: report.reportPeriod } });
+    if (extension) return extension.deadlineAt;
     const config = await this.periodConfigs.findOne({ where: { period: report.reportPeriod } });
     const month = config?.deadlineMonth || (report.reportPeriod === AccidentReportPeriod.SIX_MONTHS ? 7 : 1);
     const day = config?.deadlineDay || (report.reportPeriod === AccidentReportPeriod.SIX_MONTHS ? 5 : 10);
@@ -175,11 +226,10 @@ export class AccidentReportService implements OnModuleInit {
     return this.paginate(builder, query.page, query.size);
   }
 
-  async listForEnterprise(userId: string, query: ListAccidentReportsDto) {
+  async listForEnterprise(userId: string, query: ListMyAccidentReportsDto) {
     const year = await this.resolveYear(query.year);
     const builder = this.baseListQuery().where('enterprise.userId = :userId', { userId }).andWhere('report.year = :year', { year });
-    this.applyFilters(builder, query);
-    return this.paginate(builder, query.page, query.size);
+    return this.paginate(builder);
   }
 
   async getCategories(type: AccidentCategoryType) {
@@ -227,8 +277,9 @@ export class AccidentReportService implements OnModuleInit {
       report.submittedAt = new Date();
       report.reviewedAt = null;
       report.reviewedByUserId = null;
+      report.note = null;
     } else {
-      report.status = AccidentReportStatus.IN_PROGRESS;
+      if (report.status !== AccidentReportStatus.DECLINED) report.status = AccidentReportStatus.IN_PROGRESS;
     }
     let saved: AccidentReport;
     try {
@@ -514,8 +565,8 @@ export class AccidentReportService implements OnModuleInit {
   private validateStats(stats: any, label: string) {
     if (!stats) return;
     const value = (field: string) => numberValue(stats[field]);
-    if (value('fatalCases') > value('totalCases') || value('totalCasesWithTwoOrMoreVictims') > value('totalCases')) {
-      throw new BadRequestException(`${label}: số vụ có người chết hoặc từ hai người bị nạn không được vượt quá tổng số vụ.`);
+    if (value('fatalCases') > value('totalCases') || value('totalCasesWithTwoOrMoreVictims') > value('fatalCases')) {
+      throw new BadRequestException(`${label}: số vụ có người chết không được vượt tổng số vụ và số vụ có từ hai người chết không được vượt số vụ có người chết.`);
     }
     const victims = value('totalVictims');
     const nonManaged = value('nonManagedVictims');
@@ -525,6 +576,12 @@ export class AccidentReportService implements OnModuleInit {
       value('nonManagedFatalVictims') > value('totalFatalVictims') ||
       value('nonManagedSeverelyInjuredVictims') > value('totalSeverelyInjuredVictims')) {
       throw new BadRequestException(`${label}: các số liệu người lao động không thuộc quyền quản lý không hợp lệ.`);
+    }
+    if (value('totalFatalVictims') + value('totalSeverelyInjuredVictims') !== victims) {
+      throw new BadRequestException(`${label}: tổng số người chết và người bị thương nặng phải bằng tổng số người bị nạn.`);
+    }
+    if (value('nonManagedFatalVictims') + value('nonManagedSeverelyInjuredVictims') !== nonManaged) {
+      throw new BadRequestException(`${label}: số người chết và người bị thương nặng không thuộc quyền quản lý phải bằng tổng số người bị nạn không thuộc quyền quản lý.`);
     }
   }
 

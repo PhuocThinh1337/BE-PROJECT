@@ -6,9 +6,9 @@ import { extname } from 'path';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccidentCategoryType } from './accident-category.entity';
 import { AccidentReportService } from './accident-report.service';
-import { ListAccidentCategoriesDto, ListAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
+import { ListAccidentCategoriesDto, ListAccidentReportsDto, ListMyAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportPeriod } from './accident-report.entity';
-import { CreateAccidentCategoryDto, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
+import { CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 interface ReportPdfFile { originalname: string; mimetype: string; size: number; buffer: Buffer; }
 
@@ -39,6 +39,25 @@ export class AccidentReportController {
   reportConfigurations(@Req() request: any) {
     if (!['SO', 'DOANH_NGHIEP'].includes(request.user.role)) throw new ForbiddenException();
     return this.service.listPeriodConfigs();
+  }
+
+  @Get('report-configurations/extensions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Xem các kỳ đã được gia hạn trong năm' })
+  deadlineExtensions(@Req() request: any, @Query() query: ListReportDeadlineExtensionsDto) {
+    this.assertSo(request.user.role);
+    return this.service.listDeadlineExtensions(query);
+  }
+
+  @Post('report-configurations/:period/extend')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Gia hạn kỳ nộp nếu hết hạn nhưng còn doanh nghiệp chưa nộp' })
+  extendReportDeadline(@Req() request: any, @Param('period') period: AccidentReportPeriod, @Body() body: ExtendReportDeadlineDto) {
+    this.assertSo(request.user.role);
+    if (!Object.values(AccidentReportPeriod).includes(period)) throw new BadRequestException('Kỳ báo cáo không hợp lệ.');
+    return this.service.extendReportDeadline(period, body);
   }
 
   @Put('report-configurations/:period')
@@ -96,7 +115,7 @@ export class AccidentReportController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Doanh nghiệp lấy danh sách báo cáo của tài khoản đang đăng nhập' })
-  listMine(@Req() request: any, @Query() query: ListAccidentReportsDto) {
+  listMine(@Req() request: any, @Query() query: ListMyAccidentReportsDto) {
     this.assertEnterprise(request.user.role);
     return this.service.listForEnterprise(request.user.id, query);
   }
