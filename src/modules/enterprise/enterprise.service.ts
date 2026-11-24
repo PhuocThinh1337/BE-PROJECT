@@ -16,12 +16,16 @@ import { PageResponseDto } from '../../commons/dto/page-response.dto';
 import { EnterpriseResponseDto } from './dto/enterprise-response.dto';
 import { EnterpriseDetailResponseDto } from './dto/enterprise-detail-response.dto';
 import { AuthService } from '../auth/auth.service';
+import { ReportPeriodConfig } from '../accident-report/report-period-config.entity';
+import { ReportPeriodDeadline } from '../accident-report/report-period-deadline.entity';
 
 @Injectable()
 export class EnterpriseService {
   constructor(
     @InjectRepository(Enterprise) private readonly enterprises: Repository<Enterprise>,
     @InjectRepository(AccidentReport) private readonly accidentReports: Repository<AccidentReport>,
+    @InjectRepository(ReportPeriodConfig) private readonly reportPeriodConfigs: Repository<ReportPeriodConfig>,
+    @InjectRepository(ReportPeriodDeadline) private readonly reportPeriodDeadlines: Repository<ReportPeriodDeadline>,
     @InjectRepository(Role) private readonly roles: Repository<Role>,
     @InjectRepository(BusinessType) private readonly businessTypes: Repository<BusinessType>,
     @InjectRepository(BusinessIndustry) private readonly industries: Repository<BusinessIndustry>,
@@ -109,10 +113,44 @@ export class EnterpriseService {
     });
     await this.enterprises.save(record);
     const year = new Date().getFullYear();
-    await this.accidentReports.save([
-      this.accidentReports.create({ enterpriseId: record.id, year, reportPeriod: AccidentReportPeriod.SIX_MONTHS, status: AccidentReportStatus.PENDING }),
-      this.accidentReports.create({ enterpriseId: record.id, year, reportPeriod: AccidentReportPeriod.FULL_YEAR, status: AccidentReportStatus.PENDING }),
-    ]);
+    const now = new Date();
+    const configs = await this.reportPeriodConfigs.find();
+    const reports = [];
+    for (const period of [AccidentReportPeriod.SIX_MONTHS, AccidentReportPeriod.FULL_YEAR]) {
+      const config = configs.find((item) => item.period === period);
+      const extension = await this.reportPeriodDeadlines.findOne({
+        where: { year, period },
+      });
+
+      let deadlineAt: Date | null = extension?.deadlineAt ?? null;
+      if (!deadlineAt) {
+        const month = config?.deadlineMonth ??
+          (period === AccidentReportPeriod.SIX_MONTHS ? 7 : 1);
+        const day = config?.deadlineDay ??
+          (period === AccidentReportPeriod.SIX_MONTHS ? 5 : 10);
+        const lastDay = new Date(
+          period === AccidentReportPeriod.FULL_YEAR && month <= 3 ? year + 1 : year,
+          month,
+          0,
+        ).getDate();
+        const deadlineYear =
+          period === AccidentReportPeriod.FULL_YEAR && month <= 3 ? year + 1 : year;
+        deadlineAt = new Date(
+          `${deadlineYear}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}T23:59:59.999+07:00`,
+        );
+      }
+
+      reports.push(this.accidentReports.create({
+        enterpriseId: record.id,
+        year,
+        reportPeriod: period,
+        deadlineAt,
+        status: now >= deadlineAt
+          ? AccidentReportStatus.EXPIRED
+          : AccidentReportStatus.PENDING,
+      }));
+    }
+    await this.accidentReports.save(reports);
     return { message: 'Tạo doanh nghiệp thành công.', data: { ...created.data, enterpriseId: record.id } };
   }
 

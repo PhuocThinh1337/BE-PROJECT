@@ -36,6 +36,7 @@ import { AddAccidentReportAudit1860000000000 } from './database/migrations/18600
 import { ReportPeriodConfig } from './modules/accident-report/report-period-config.entity';
 import { ReportPeriodDeadline } from './modules/accident-report/report-period-deadline.entity';
 import { CreateReportPeriodDeadlines1870000000000 } from './database/migrations/1870000000000-CreateReportPeriodDeadlines';
+import { AddAccidentReportDeadline1880000000000 } from './database/migrations/1880000000000-AddAccidentReportDeadline';
 import { AccidentReportModule } from './modules/accident-report/accident-report.module';
 
 @Module({
@@ -68,6 +69,7 @@ import { AccidentReportModule } from './modules/accident-report/accident-report.
         CreateReportConfiguration1850000000000,
         AddAccidentReportAudit1860000000000,
         CreateReportPeriodDeadlines1870000000000,
+        AddAccidentReportDeadline1880000000000,
       ],
       synchronize: process.env.VNA_DB_SYNCHRONIZE === 'true',
       migrationsRun: process.env.VNA_DB_MIGRATIONS_RUN === 'true',

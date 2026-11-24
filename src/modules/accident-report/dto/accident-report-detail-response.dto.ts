@@ -8,6 +8,7 @@ export interface AccidentReportDetailResponse {
   reportPeriod: AccidentReportPeriod;
   status: AccidentReportStatus;
   note: string;
+  deadlineAt: Date | null;
   submittedAt: Date | null;
   reviewedAt: Date | null;
   reviewedByUserId: string | null;

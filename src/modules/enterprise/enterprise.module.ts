@@ -13,10 +13,12 @@ import { EnterpriseService } from './enterprise.service';
 import { EnterpriseReferenceController } from './enterprise-reference.controller';
 import { AuthModule } from '../auth/auth.module';
 import { AccidentReport } from '../accident-report/accident-report.entity';
+import { ReportPeriodConfig } from '../accident-report/report-period-config.entity';
+import { ReportPeriodDeadline } from '../accident-report/report-period-deadline.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Enterprise, BusinessType, BusinessIndustry, Role, AuthSession, AccidentReport]),
+    TypeOrmModule.forFeature([Enterprise, BusinessType, BusinessIndustry, Role, AuthSession, AccidentReport, ReportPeriodConfig, ReportPeriodDeadline]),
     UserModule,
     AuthModule,
     JwtModule.registerAsync({

@@ -14,7 +14,7 @@ import { AccidentDetailDto, AccidentStatsDto, ListAccidentReportsDto, ListMyAcci
 import { AccidentReportDetailResponse } from './dto/accident-report-detail-response.dto';
 import { ReportPeriodConfig } from './report-period-config.entity';
 import { ReportPeriodDeadline } from './report-period-deadline.entity';
-import { CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, REPORT_FIELDS, ReportConfigYearsResponse, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
+import { ConfigureReportDeadlineDto, CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, REPORT_FIELDS, ReportConfigYearsResponse, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 const victimFields = [
   'totalCases', 'fatalCases', 'totalCasesWithTwoOrMoreVictims', 'totalVictims', 'nonManagedVictims',
@@ -69,42 +69,98 @@ export class AccidentReportService implements OnModuleInit {
 
   async extendReportDeadline(input: ExtendReportDeadlineDto) {
     const period = input.period;
-    await this.ensureReportsForYear(input.year);
-    const config = await this.periodConfigs.findOne({ where: { period } });
-    if (!config) throw new NotFoundException('Không tìm thấy cấu hình kỳ báo cáo.');
+    if (!input.additionalDays && !input.deadlineAt) {
+      throw new BadRequestException('Vui lòng nhập số ngày hoặc ngày hạn nộp mới.');
+    }
+    if (input.additionalDays && input.deadlineAt) {
+      throw new BadRequestException('Chỉ được nhập số ngày hoặc ngày hạn nộp, không nhập cả hai.');
+    }
+    const report = await this.findReport(input.accidentReportId);
+    if (report.year !== input.year) throw new BadRequestException('Năm của báo cáo không khớp.');
+    if (report.reportPeriod !== period) throw new BadRequestException('Kỳ báo cáo không khớp.');
+    if (report.status !== AccidentReportStatus.EXPIRED) {
+      throw new ConflictException('Chỉ được gia hạn báo cáo đang ở trạng thái hết hạn.');
+    }
 
-    const extension = await this.periodDeadlines.findOne({ where: { year: input.year, period } });
-    const deadlineYear = period === AccidentReportPeriod.FULL_YEAR && config.deadlineMonth <= 3 ? input.year + 1 : input.year;
-    const currentDeadline = extension?.deadlineAt || this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
+    const currentDeadline = await this.deadline(report);
     const now = new Date();
     if (now < currentDeadline) throw new ConflictException('Chỉ được gia hạn sau khi đã hết hạn nộp báo cáo.');
 
-    const totalReports = await this.reports.count({ where: { year: input.year, reportPeriod: period } });
-    const submittedStatuses = [AccidentReportStatus.ACCEPTED, AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED];
-    const submittedReports = await this.reports.createQueryBuilder('report')
-      .where('report.year = :year AND report.reportPeriod = :period', { year: input.year, period })
-      .andWhere('report.status IN (:...statuses)', { statuses: submittedStatuses })
-      .getCount();
-    if (totalReports === 0 || submittedReports >= totalReports) {
-      throw new ConflictException('Không thể gia hạn vì số báo cáo đã nộp đã đạt yêu cầu.');
-    }
-
-    const deadlineAt = new Date(now.getTime() + input.additionalDays * 24 * 60 * 60 * 1000);
-    const savedExtension = await this.periodDeadlines.save(this.periodDeadlines.create({
-      ...(extension || {}), year: input.year, period, deadlineAt,
-    }));
-    await this.reports.update(
-      { year: input.year, reportPeriod: period, status: AccidentReportStatus.EXPIRED },
-      { status: AccidentReportStatus.PENDING },
+    const deadlineAt = input.deadlineAt
+      ? new Date(`${input.deadlineAt.slice(0, 10)}T23:59:59.999+07:00`)
+      : new Date(now.getTime() + input.additionalDays! * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(deadlineAt.getTime())) throw new BadRequestException('Ngày hạn nộp không hợp lệ.');
+    if (deadlineAt <= currentDeadline) throw new ConflictException('Ngày hạn nộp mới phải sau hạn nộp hiện tại.');
+    if (deadlineAt <= now) throw new BadRequestException('Ngày hạn nộp mới phải là ngày trong tương lai.');
+    await this.reports.query(
+      'UPDATE "accident_reports" SET "deadlineAt" = $1, "status" = $2 WHERE "id" = $3',
+      [deadlineAt, AccidentReportStatus.PENDING, report.id],
     );
+    report.deadlineAt = deadlineAt;
+    report.status = AccidentReportStatus.PENDING;
     return {
       success: true,
       data: {
-        ...savedExtension,
-        message: `Đã gia hạn thêm ${input.additionalDays} ngày vì vẫn còn doanh nghiệp chưa nộp báo cáo.`,
-        totalReports,
-        submittedReports,
-        remainingReports: totalReports - submittedReports,
+        accidentReportId: report.id,
+        deadlineAt,
+        message: input.additionalDays
+          ? `Đã gia hạn thêm ${input.additionalDays} ngày vì vẫn còn doanh nghiệp chưa nộp báo cáo.`
+          : `Đã đặt hạn nộp mới đến ${deadlineAt.toISOString().slice(0, 10)}.`,
+      },
+    };
+  }
+
+  async configureReportDeadline(input: ConfigureReportDeadlineDto) {
+    const currentYear = new Date().getFullYear();
+    if (input.year !== currentYear) throw new BadRequestException('Chỉ được cấu hình thời hạn trong năm hiện tại.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.deadlineAt)) throw new BadRequestException('Ngày hạn nộp không hợp lệ.');
+
+    const deadlineAt = new Date(`${input.deadlineAt}T23:59:59.999+07:00`);
+    if (Number.isNaN(deadlineAt.getTime())) {
+      throw new BadRequestException('Ngày hạn nộp không hợp lệ.');
+    }
+    const deadlineYear = deadlineAt.getUTCFullYear();
+    const validYear = input.period === AccidentReportPeriod.SIX_MONTHS
+      ? deadlineYear === currentYear
+      : deadlineYear === currentYear || deadlineYear === currentYear + 1;
+    if (!validYear) {
+      throw new BadRequestException(
+        input.period === AccidentReportPeriod.SIX_MONTHS
+          ? 'Ngày hạn nộp 6 tháng phải nằm trong năm hiện tại.'
+          : 'Ngày hạn nộp cả năm phải nằm trong năm hiện tại hoặc năm sau.',
+      );
+    }
+
+    const reports = await this.reports.find({
+      where: { year: currentYear, reportPeriod: input.period },
+    });
+    const now = new Date();
+    await this.reports.query(
+      'UPDATE "accident_reports" SET "deadlineAt" = $1 WHERE "year" = $2 AND "reportPeriod" = $3',
+      [deadlineAt, currentYear, input.period],
+    );
+    if (now >= deadlineAt) {
+      await this.reports.query(
+        'UPDATE "accident_reports" SET "status" = $1 WHERE "year" = $2 AND "reportPeriod" = $3 AND "status" IN ($4, $5)',
+        [AccidentReportStatus.EXPIRED, currentYear, input.period, AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS],
+      );
+    } else {
+      await this.reports.query(
+        'UPDATE "accident_reports" SET "status" = $1 WHERE "year" = $2 AND "reportPeriod" = $3 AND "status" = $4',
+        [AccidentReportStatus.PENDING, currentYear, input.period, AccidentReportStatus.EXPIRED],
+      );
+    }
+
+    const periodLabel = input.period === AccidentReportPeriod.SIX_MONTHS ? '6 tháng' : 'cả năm';
+    const displayDate = input.deadlineAt.split('-').reverse().join('/');
+    return {
+      success: true,
+      data: {
+        year: currentYear,
+        period: input.period,
+        deadlineAt,
+        updatedReports: reports.length,
+        message: `Hạn báo cáo ${periodLabel} trong năm nay đã được đặt vào ngày ${displayDate}`,
       },
     };
   }
@@ -168,23 +224,29 @@ export class AccidentReportService implements OnModuleInit {
     ), [] as any[]);
     await this.reports.createQueryBuilder().insert().values(values as any)
       .onConflict('("enterpriseId", "year", "reportPeriod") DO NOTHING').execute();
-    const now = new Date();
     const statuses = [AccidentReportStatus.PENDING, AccidentReportStatus.IN_PROGRESS];
     for (const config of configs) {
-      const deadlineYear = config.period === AccidentReportPeriod.FULL_YEAR && config.deadlineMonth <= 3 ? year + 1 : year;
-      const extension = await this.periodDeadlines.findOne({ where: { year, period: config.period } });
-      const deadline = extension?.deadlineAt || this.makeDeadline(deadlineYear, config.deadlineMonth, config.deadlineDay);
-      if (now >= deadline) await this.reports.createQueryBuilder().update().set({ status: AccidentReportStatus.EXPIRED })
-        .where('"year" = :year AND "reportPeriod" = :period AND "status" IN (:...statuses)', { year, period: config.period, statuses }).execute();
+      const reports = await this.reports.find({
+        where: {
+          year,
+          reportPeriod: config.period,
+          status: In(statuses),
+        },
+      });
+      for (const report of reports) await this.expireIfOverdue(report);
     }
   }
 
   private makeDeadline(year: number, month: number, day: number) {
     const lastDay = new Date(year, month, 0).getDate();
-    return new Date(year, month - 1, Math.min(day, lastDay), 0, 0, 0, 0);
+    const deadlineDay = Math.min(day, lastDay);
+    const mm = String(month).padStart(2, '0');
+    const dd = String(deadlineDay).padStart(2, '0');
+    return new Date(`${year}-${mm}-${dd}T23:59:59.999+07:00`);
   }
 
   private async deadline(report: AccidentReport) {
+    if (report.deadlineAt) return report.deadlineAt;
     const extension = await this.periodDeadlines.findOne({ where: { year: report.year, period: report.reportPeriod } });
     if (extension) return extension.deadlineAt;
     const config = await this.periodConfigs.findOne({ where: { period: report.reportPeriod } });
@@ -202,6 +264,7 @@ export class AccidentReportService implements OnModuleInit {
     return report;
   }
 
+
   async reviewReports(input: ReviewAccidentReportsDto, reviewerId: string) {
     return this.reports.manager.transaction(async (manager) => {
       const repository = manager.getRepository(AccidentReport);
@@ -212,7 +275,9 @@ export class AccidentReportService implements OnModuleInit {
       const reviewedAt = new Date();
       for (const report of reports) {
         report.status = input.status;
-        report.note = input.note;
+        report.note = input.status === AccidentReportStatus.APPROVED
+          ? null
+          : input.note ?? null;
         report.reviewedAt = reviewedAt;
         report.reviewedByUserId = reviewerId;
       }
@@ -280,7 +345,9 @@ export class AccidentReportService implements OnModuleInit {
       report.reviewedByUserId = null;
       report.note = null;
     } else {
-      if (report.status !== AccidentReportStatus.DECLINED) report.status = AccidentReportStatus.IN_PROGRESS;
+      report.status = report.status === AccidentReportStatus.DECLINED
+        ? AccidentReportStatus.DECLINED
+        : AccidentReportStatus.IN_PROGRESS;
     }
     let saved: AccidentReport;
     try {
@@ -514,7 +581,7 @@ export class AccidentReportService implements OnModuleInit {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, name: report.enterprise.name,
       taxCode: report.enterprise.taxCode, reportPeriod: report.reportPeriod, status: report.status,
-      year: report.year, note: report.note || '', submittedAt: report.submittedAt, reviewedAt: report.reviewedAt,
+      year: report.year, note: report.note || '', deadlineAt: report.deadlineAt, submittedAt: report.submittedAt, reviewedAt: report.reviewedAt,
       reviewedByUserId: report.reviewedByUserId, createdAt: report.createdAt, updatedAt: report.updatedAt,
     };
   }
@@ -522,7 +589,7 @@ export class AccidentReportService implements OnModuleInit {
   private toDetail(report: AccidentReport): AccidentReportDetailResponse {
     return {
       accidentReportId: report.id, enterpriseId: report.enterpriseId, year: report.year,
-      reportPeriod: report.reportPeriod, status: report.status, note: report.note || '', submittedAt: report.submittedAt,
+      reportPeriod: report.reportPeriod, status: report.status, note: report.note || '', deadlineAt: report.deadlineAt, submittedAt: report.submittedAt,
       reviewedAt: report.reviewedAt, reviewedByUserId: report.reviewedByUserId, companyName: report.enterprise.name,
       taxCode: report.enterprise.taxCode, businessTypeName: report.enterprise.businessType.name,
       businessIndustryName: report.enterprise.businessIndustry.name, totalEmployees: report.totalEmployees,
@@ -578,11 +645,11 @@ export class AccidentReportService implements OnModuleInit {
       value('nonManagedSeverelyInjuredVictims') > value('totalSeverelyInjuredVictims')) {
       throw new BadRequestException(`${label}: các số liệu người lao động không thuộc quyền quản lý không hợp lệ.`);
     }
-    if (value('totalFatalVictims') + value('totalSeverelyInjuredVictims') !== victims) {
-      throw new BadRequestException(`${label}: tổng số người chết và người bị thương nặng phải bằng tổng số người bị nạn.`);
+    if (value('totalFatalVictims') + value('totalSeverelyInjuredVictims') > victims) {
+      throw new BadRequestException(`${label}: tổng số người chết và người bị thương nặng không được lớn hơn tổng số người bị nạn.`);
     }
-    if (value('nonManagedFatalVictims') + value('nonManagedSeverelyInjuredVictims') !== nonManaged) {
-      throw new BadRequestException(`${label}: số người chết và người bị thương nặng không thuộc quyền quản lý phải bằng tổng số người bị nạn không thuộc quyền quản lý.`);
+    if (value('nonManagedFatalVictims') + value('nonManagedSeverelyInjuredVictims') > nonManaged) {
+      throw new BadRequestException(`${label}: số người chết và người bị thương nặng không thuộc quyền quản lý không được lớn hơn tổng số người bị nạn không thuộc quyền quản lý.`);
     }
   }
 

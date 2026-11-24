@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { AccidentReportPeriod } from '../accident-report.entity';
 
 export const REPORT_FIELDS = ['totalEmployees', 'femaleEmployees', 'totalSalaryFund', 'accidentTotals', 'accidentDetails', 'subsidizedAccident'] as const;
@@ -15,13 +15,21 @@ export class UpdateReportPeriodConfigDto {
 }
 
 export class ExtendReportDeadlineDto {
+  @IsUUID('4') accidentReportId: string;
   @IsEnum(AccidentReportPeriod) period: AccidentReportPeriod;
   @Type(() => Number) @IsInt() @Min(2000) @Max(new Date().getFullYear() + 20) year: number;
-  @Type(() => Number) @IsInt() @Min(1) @Max(365) additionalDays: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365) additionalDays?: number;
+  @IsOptional() @IsString() deadlineAt?: string;
 }
 
 export class ListReportDeadlineExtensionsDto {
   @Type(() => Number) @IsInt() @Min(2000) @Max(new Date().getFullYear() + 20) year: number;
+}
+
+export class ConfigureReportDeadlineDto {
+  @IsEnum(AccidentReportPeriod) period: AccidentReportPeriod;
+  @Type(() => Number) @IsInt() @Min(2000) @Max(new Date().getFullYear()) year: number;
+  @IsString() deadlineAt: string;
 }
 
 export class CreateAccidentCategoryDto {

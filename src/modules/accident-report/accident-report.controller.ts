@@ -8,7 +8,7 @@ import { AccidentCategoryType } from './accident-category.entity';
 import { AccidentReportService } from './accident-report.service';
 import { ListAccidentCategoriesDto, ListAccidentReportsDto, ListMyAccidentReportsDto, ReviewAccidentReportsDto, UpdateAccidentReportDto } from './dto/accident-report.dto';
 import { AccidentReportPeriod } from './accident-report.entity';
-import { CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
+import { ConfigureReportDeadlineDto, CreateAccidentCategoryDto, ExtendReportDeadlineDto, ListReportDeadlineExtensionsDto, UpdateAccidentCategoryDto, UpdateReportPeriodConfigDto } from './dto/report-configuration.dto';
 
 interface ReportPdfFile { originalname: string; mimetype: string; size: number; buffer: Buffer; }
 
@@ -53,10 +53,19 @@ export class AccidentReportController {
   @Post('report-configs/extend')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Gia hạn kỳ nộp nếu hết hạn nhưng còn doanh nghiệp chưa nộp' })
+  @ApiOperation({ summary: 'Gia hạn riêng hạn nộp của một báo cáo đã hết hạn' })
   extendReportDeadline(@Req() request: any, @Body() body: ExtendReportDeadlineDto) {
     this.assertSo(request.user.role);
     return this.service.extendReportDeadline(body);
+  }
+
+  @Post('report-configs/configure')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cấu hình hạn nộp cho tất cả báo cáo cùng kỳ trong năm hiện tại' })
+  configureReportDeadline(@Req() request: any, @Body() body: ConfigureReportDeadlineDto) {
+    this.assertSo(request.user.role);
+    return this.service.configureReportDeadline(body);
   }
 
   @Put('report-configurations/:period')

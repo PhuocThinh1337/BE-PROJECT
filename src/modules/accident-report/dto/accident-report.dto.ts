@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { plainToClass, Transform, Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsEnum, IsIn, IsInt, IsNumber, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEnum, IsIn, IsInt, IsNumber, IsNotEmpty, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { AccidentCategoryType } from '../accident-category.entity';
 import { AccidentReportPeriod, AccidentReportStatus } from '../accident-report.entity';
 
@@ -77,7 +77,12 @@ export class UpdateAccidentReportDto {
 export class ReviewAccidentReportsDto {
   @IsArray() @ArrayNotEmpty() @IsUUID('4', { each: true }) accidentReportIds: string[];
   @IsIn([AccidentReportStatus.APPROVED, AccidentReportStatus.DECLINED]) status: AccidentReportStatus.APPROVED | AccidentReportStatus.DECLINED;
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(500) note: string;
+  @Transform(({ value }) => typeof value === 'string' ? (value.trim() || undefined) : value)
+  @ValidateIf((input) => input.status === AccidentReportStatus.DECLINED)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  note?: string;
 }
 
 export class ListAccidentReportsDto {
